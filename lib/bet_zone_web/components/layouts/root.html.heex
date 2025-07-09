@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= assigns[:page_title] || "BetZone" %></title>
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <!-- <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script> -->
+    <.live_title suffix=" · BetZone">
+      <%= assigns[:page_title] || "BetZone" %>
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+    <script phx-track-static type="text/javascript" src={~p"/assets/app.js"}></script>
+  </head>
+  <body class="min-h-screen w-full m-0 p-0 font-cabin text-sm">
+    <%= @inner_content %>
+  </body>
+</html>

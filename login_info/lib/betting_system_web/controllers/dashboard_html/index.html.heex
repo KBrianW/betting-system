@@ -1,0 +1,31 @@
+<.header>
+  Listing Dashboards
+  <:actions>
+    <.link navigate={~p"/dashboards/new"}>
+      <.button>New Dashboard</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.table id="dashboards" rows={@dashboards} row_click={&JS.navigate(~p"/dashboards/#{&1.id}")}>
+  <:col :let={dashboard} label="Name">
+    <%= dashboard.name %>
+  </:col>
+  
+  <:col :let={dashboard} label="Created At">
+    <%= dashboard.inserted_at %>
+  </:col>
+
+  <:action :let={dashboard}>
+    <div class="sr-only">
+      <.link navigate={~p"/dashboards/#{dashboard.id}"}>Show</.link>
+    </div>
+    <.link navigate={~p"/dashboards/#{dashboard.id}/edit"}>Edit</.link>
+  </:action>
+  
+  <:action :let={dashboard}>
+    <.link href={~p"/dashboards/#{dashboard.id}"} method="delete" data-confirm="Are you sure?">
+      Delete
+    </.link>
+  </:action>
+</.table>
