@@ -1,8 +1,0 @@
-<.header>
-  Edit Dashboard {@dashboard.id}
-  <:subtitle>Use this form to manage dashboard records in your database.</:subtitle>
-</.header>
-
-<.dashboard_form changeset={@changeset} action={~p"/dashboards/#{@dashboard}"} />
-
-<.back navigate={~p"/dashboards"}>Back to dashboards</.back>

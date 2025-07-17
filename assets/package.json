@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "scripts": {
+    "deploy": "tailwindcss -i ./css/app.css -o ../priv/static/assets/app.css --minify",
+    "watch": "tailwindcss -i ./css/app.css -o ../priv/static/assets/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.0"
+  },
+  "dependencies": {
+    "@tailwindcss/forms": "^0.5.10"
+  }
+}

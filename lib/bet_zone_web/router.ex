@@ -7,35 +7,68 @@ defmodule BetZoneWeb.Router do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :fetch_live_flash
-    plug :put_root_layout, html: {BetZoneWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :fetch_current_user
+  end
+
+  pipeline :app do
+    plug :put_root_layout, html: {BetZoneWeb.Layouts, :app}
+  end
+
+  pipeline :super_app do
+    plug :put_root_layout, html: {BetZoneWeb.Layouts, :super_app}
+  end
+
+  pipeline :panel do
+    plug :put_root_layout, html: {BetZoneWeb.Layouts, :panel}
+  end
+
+  pipeline :root do
+    plug :put_root_layout, html: {BetZoneWeb.Layouts, :root}
   end
 
   pipeline :api do
     plug :accepts, ["json"]
   end
 
+  # User Dashboard Scope
   scope "/", BetZoneWeb do
-    pipe_through :browser
-
-    live "/", DashboardLive, :index
+    pipe_through [:browser, :app]
     live "/dashboard", DashboardLive, :index
     live "/basketball", OtherSportsLive, :basketball
     live "/tennis", OtherSportsLive, :tennis
     live "/rugby", OtherSportsLive, :rugby
     live "/volleyball", OtherSportsLive, :volleyball
     live "/hockey", OtherSportsLive, :hockey
-    live "/admin_panel", AdminPanelLive, :index
+  end
+
+  # Super User Dashboard Scope
+  scope "/", BetZoneWeb do
+    pipe_through [:browser, :super_app]
     live "/super_panel", SuperPanelLive, :index
+    live "/super_basketball", OtherSportsLive, :basketball
+    live "/super_tennis", OtherSportsLive, :tennis
+    live "/super_rugby", OtherSportsLive, :rugby
+    live "/super_volleyball", OtherSportsLive, :volleyball
+    live "/super_hockey", OtherSportsLive, :hockey
+  end
 
-    get "/", UserSessionController, :new
+  # Admin Panel Scope
+  scope "/", BetZoneWeb do
+    pipe_through [:browser, :panel]
+    live "/admin_panel", AdminPanelLive, :index
+  end
 
-    # User authentication routes
+  # Authentication and General User Actions Scope
+  scope "/", BetZoneWeb do
+    pipe_through [:browser, :root]
+    get "/", RedirectController, :dashboard_redirect # Set root path to redirect to dashboard
+    delete "/users/register", RedirectController, :register_redirect
     live "/users/register", UserRegistrationLive, :new
+    live "/users/log_in", UserLoginLive, :new
     post "/users/log_in", UserSessionController, :create
-    delete "/users/log_out", UserSessionController, :delete
+    post "/users/log_out", UserSessionController, :delete
     live "/users/reset_password", UserForgotPasswordLive, :new
     live "/users/reset_password/:token", UserResetPasswordLive, :edit
     live "/users/confirm", UserConfirmationInstructionsLive, :new

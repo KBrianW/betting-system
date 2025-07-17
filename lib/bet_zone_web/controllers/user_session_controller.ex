@@ -48,8 +48,4 @@ defmodule BetZoneWeb.UserSessionController do
     |> put_flash(:info, "Logged out successfully.")
     |> UserAuth.log_out_user()
   end
-
-  def new(conn, _params) do
-    render(conn, "new.html", email: "")
-  end
 end

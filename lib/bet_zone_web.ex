@@ -53,7 +53,7 @@ defmodule BetZoneWeb do
   def live_view do
     quote do
       use Phoenix.LiveView,
-        layout: {BetZoneWeb.Layouts, :app}
+        layout: {BetZoneWeb.Layouts, :root}
 
       unquote(html_helpers())
     end

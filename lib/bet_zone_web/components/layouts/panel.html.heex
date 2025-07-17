@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= assigns[:page_title] || "BetZone" %></title>
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title suffix=" · BetZone">
+      <%= assigns[:page_title] || "BetZone" %>
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+    <script phx-track-static type="text/javascript" src={~p"/assets/app.js"}></script>
+  </head>
+  <body class="min-h-screen w-full m-0 p-0 font-cabin text-sm bg-orange-50">
+    <header class="px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between border-b border-zinc-100 py-3 text-sm">
+        <div class="flex items-center gap-4">
+          <a href="/">
+            <img src="/images/logo.svg" width="36" />
+          </a>
+          <p class="bg-brand/5 text-brand rounded-full px-2 font-medium leading-6">
+            BetZone
+          </p>
+        </div>
+        <div class="flex items-center gap-4">
+          <%= if @current_user do %>
+            <span class="text-gray-700 font-semibold">Hello, <%= @current_user.first_name %></span>
+            <form method="post" action="/users/log_out">
+              <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+              <button type="submit" class="w-full bg-black text-white px-4 py-2 rounded font-semibold transition hover:bg-brand">Log out</button>
+            </form>
+          <% else %>
+            <a href="/users/log_in" class="px-3 py-1 rounded bg-gray-800 text-white hover:bg-brand transition">Login</a>
+            <a href="/users/register" class="px-3 py-1 rounded bg-gray-800 text-white hover:bg-brand transition">Register</a>
+          <% end %>
+        </div>
+      </div>
+    </header>
+    <main class="flex-1 overflow-auto">
+      <.flash_group flash={@flash} />
+      <%= @inner_content %>
+    </main>
+  </body>
+</html> 
