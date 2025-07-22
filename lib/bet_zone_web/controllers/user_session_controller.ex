@@ -1,8 +1,17 @@
 defmodule BetZoneWeb.UserSessionController do
   use BetZoneWeb, :controller
 
+  import Phoenix.Component, only: [to_form: 1, to_form: 2]
+
   alias BetZone.Accounts
   alias BetZoneWeb.UserAuth
+
+  def new(conn, _params) do
+    conn
+    |> assign(:page_title, "Log in")
+    |> assign(:form, to_form(%{"email" => nil, "password" => nil}, as: "user"))
+    |> render(:new)
+  end
 
   def create(conn, %{"_action" => "registered"} = params) do
     create(conn, params, "Account created successfully!")
@@ -27,18 +36,19 @@ defmodule BetZoneWeb.UserSessionController do
       |> UserAuth.log_in_user(user, user_params)
       |> redirect_user_after_login(user)
     else
+      # In order to prevent user enumeration attacks, don't disclose whether the email is registered.
       conn
       |> put_flash(:error, "Invalid email or password")
-      |> put_flash(:email, String.slice(email, 0, 160))
-      |> redirect(to: ~p"/users/log_in")
+      |> assign(:form, to_form(%{email: email}, as: "user"))
+      |> render(:new)
     end
   end
 
   defp redirect_user_after_login(conn, user) do
     case user.role do
-      :frontend -> redirect(conn, to: "/dashboard")
-      :admin -> redirect(conn, to: "/admin_panel")
-      :super_user -> redirect(conn, to: "/super_panel")
+      :frontend -> redirect(conn, to: ~p"/dashboard")
+      :admin -> redirect(conn, to: ~p"/admin_panel")
+      :super_user -> redirect(conn, to: ~p"/super_panel")
       _ -> redirect(conn, to: "/")
     end
   end

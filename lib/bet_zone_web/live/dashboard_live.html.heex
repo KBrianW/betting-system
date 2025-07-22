@@ -1,8 +1,18 @@
 <!-- Main Dashboard Content Switcher -->
 <%= case @dashboard_view do %>
   <% "games" -> %>
+    <%= if @current_user do %>
+      <div class="flex items-center gap-2 mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clip-rule="evenodd" />
+        </svg>
+        <.live_component module={BetZoneWeb.WalletBalanceComponent} id={"wallet-balance-#{@current_user.id}"} user_id={@current_user.id} />
+        <button phx-click="show_deposit_modal" class="ml-2 bg-black text-white px-4 py-2 rounded font-semibold transition hover:bg-brand">Deposit</button>
+      </div>
+    <% end %>
     <!-- Week Selector as Row of Buttons -->
-    <div class="flex items-center space-x-2 mt-4 mb-6">`
+    <div class="flex items-center space-x-2 mt-4 mb-6">
       <span class="font-semibold mr-2 text-gray-700">Week:</span>
       <%= for w <- 1..8 do %>
         <button
@@ -27,6 +37,7 @@
         All
       </button>
     </div>
+
     <!-- Tabs for Games -->
     <div class="flex space-x-4 border-b border-gray-200 mb-6">
       <button phx-click="change_tab" phx-value-tab="upcoming" class={[
@@ -42,112 +53,102 @@
         @tab == "completed" && "border-gray-700" || "border-transparent"
       ]}>Completed</button>
     </div>
-    <!-- Games List (one per row) -->
-    <div class="flex flex-col space-y-4">
-      <%= for game <- filter_games_by_tab(@games, @tab) do %>
-        <div class="border border-gray-200 rounded p-4 shadow-sm hover:shadow-md flex items-center justify-between bg-white">
-          <div class="flex flex-1 items-center justify-between">
-            <div class="flex items-center space-x-4">
-              <span class="font-semibold text-lg text-gray-800"><%= game.team_a %></span>
-              <span class="mx-2 text-gray-300">vs</span>
-              <span class="font-semibold text-lg text-gray-800"><%= game.team_b %></span>
-              <span class="text-xs text-gray-400 ml-4"><%= Calendar.strftime(game.scheduled_time, "%a, %d %b %Y %H:%M") %></span>
+
+    <!-- Games List -->
+    <div class="flex-1 overflow-auto transition-[margin] duration-300 ease-in-out relative z-10" style={"margin-right: #{if @bet_slip_open, do: "20rem", else: "0"}"}>
+      <div class="flex flex-col space-y-4">
+        <%= for game <- filter_games_by_tab(@games, @tab) do %>
+          <div class="border border-gray-200 rounded p-4 shadow-sm hover:shadow-md flex items-center justify-between bg-white">
+            <div class="flex flex-1 items-center justify-between">
+              <div class="flex items-center space-x-4">
+                <span class="font-semibold text-lg text-gray-800"><%= game.team_a %></span>
+                <span class="mx-2 text-gray-300">vs</span>
+                <span class="font-semibold text-lg text-gray-800"><%= game.team_b %></span>
+                <span class="text-xs text-gray-400 ml-4"><%= Calendar.strftime(game.scheduled_time, "%a, %d %b %Y %H:%M") %></span>
+              </div>
+              <%= if @tab == "completed" do %>
+                <div class="flex items-center space-x-6">
+                  <span class="text-xl font-bold text-gray-700"><%= elem(game.score, 0) %> - <%= elem(game.score, 1) %></span>
+                  <span class="text-sm text-gray-500">Ended: <%= Calendar.strftime(DateTime.add(game.scheduled_time, 10 * 60, :second), "%H:%M") %></span>
+                </div>
+              <% end %>
+              <%= if @tab == "ongoing" do %>
+                <div class="flex items-center space-x-6">
+                  <span class="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">Live: <%= game.elapsed %>' / 10'</span>
+                  <span class="text-xl font-bold text-gray-700"><%= elem(game.score, 0) %> - <%= elem(game.score, 1) %></span>
+                </div>
+              <% end %>
             </div>
-            <%= if @tab == "completed" do %>
-              <div class="flex items-center space-x-6">
-                <span class="text-xl font-bold text-gray-700"><%= elem(game.score, 0) %> - <%= elem(game.score, 1) %></span>
-                <span class="text-sm text-gray-500">Ended: <%= Calendar.strftime(DateTime.add(game.scheduled_time, 10 * 60, :second), "%H:%M") %></span>
-              </div>
-            <% end %>
-            <%= if @tab == "ongoing" do %>
-              <div class="flex items-center space-x-6">
-                <span class="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">Live: <%= game.elapsed %>' / 10'</span>
-                <span class="text-xl font-bold text-gray-700"><%= elem(game.score, 0) %> - <%= elem(game.score, 1) %></span>
-              </div>
-            <% end %>
-          </div>
-          <div class="flex items-center space-x-2 ml-4">
-            <%= if @tab == "upcoming" or @tab == "ongoing" do %>
-              <%= if @current_user do %>
-                <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="win" class={[
-                  "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
-                  @selected_odds[{game.id, "Win"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
-                ]}>Win: <%= game.odds.win %></button>
-              <% else %>
-                <%= raw """
-<form id=\"bet-intent-form-#{game.id}-win\" action=\"/bet_intent/store\" method=\"post\" style=\"display:none;\">
-  <input type=\"hidden\" name=\"bet_intent[game_id]\" value=\"#{game.id}\" />
-  <input type=\"hidden\" name=\"bet_intent[bet_type]\" value=\"win\" />
-</form>
-""" %>
-                <button onclick={"document.getElementById('bet-intent-form-#{game.id}-win').submit();"} class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">Win: <%= game.odds.win %></button>
+            <div class="flex items-center space-x-2 ml-4">
+              <%= if @tab == "upcoming" or @tab == "ongoing" do %>
+                <%= if @current_user do %>
+                  <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="win" class={[
+                    "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
+                    @selected_odds[{game.id, "Win"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
+                  ]}>Win: <%= game.odds.win %></button>
+                <% else %>
+                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">
+                    Win: <%= game.odds.win %>
+                  </button>
+                <% end %>
+                <%= if @current_user do %>
+                  <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="draw" class={[
+                    "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
+                    @selected_odds[{game.id, "Draw"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
+                  ]}>Draw: <%= game.odds.draw %></button>
+                <% else %>
+                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">
+                    Draw: <%= game.odds.draw %>
+                  </button>
+                <% end %>
+                <%= if @current_user do %>
+                  <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="loss" class={[
+                    "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
+                    @selected_odds[{game.id, "Loss"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
+                  ]}>Loss: <%= game.odds.loss %></button>
+                <% else %>
+                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">
+                    Loss: <%= game.odds.loss %>
+                  </button>
+                <% end %>
               <% end %>
-              <%= if @current_user do %>
-                <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="draw" class={[
-                  "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
-                  @selected_odds[{game.id, "Draw"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
-                ]}>Draw: <%= game.odds.draw %></button>
-              <% else %>
-                <%= raw """
-<form id=\"bet-intent-form-#{game.id}-draw\" action=\"/bet_intent/store\" method=\"post\" style=\"display:none;\">
-  <input type=\"hidden\" name=\"bet_intent[game_id]\" value=\"#{game.id}\" />
-  <input type=\"hidden\" name=\"bet_intent[bet_type]\" value=\"draw\" />
-</form>
-""" %>
-                <button onclick={"document.getElementById('bet-intent-form-#{game.id}-draw').submit();"} class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">Draw: <%= game.odds.draw %></button>
-              <% end %>
-              <%= if @current_user do %>
-                <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="loss" class={[
-                  "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
-                  @selected_odds[{game.id, "Loss"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
-                ]}>Loss: <%= game.odds.loss %></button>
-              <% else %>
-                <%= raw """
-<form id=\"bet-intent-form-#{game.id}-loss\" action=\"/bet_intent/store\" method=\"post\" style=\"display:none;\">
-  <input type=\"hidden\" name=\"bet_intent[game_id]\" value=\"#{game.id}\" />
-  <input type=\"hidden\" name=\"bet_intent[bet_type]\" value=\"loss\" />
-</form>
-""" %>
-                <button onclick={"document.getElementById('bet-intent-form-#{game.id}-loss').submit();"} class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">Loss: <%= game.odds.loss %></button>
-              <% end %>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
-      <%= if Enum.empty?(filter_games_by_tab(@games, @tab)) do %>
-        <p class="text-gray-400 text-center">No games in this category.</p>
-      <% end %>
-    </div>
-  <% "history" -> %>
-    <div class="mt-8 mb-8 max-w-2xl mx-auto">
-      <button phx-click="show_games" class="mb-4 text-gray-600 hover:underline flex items-center"><svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>Back to Games</button>
-      <h3 class="text-xl font-bold mb-4 text-gray-700">History</h3>
-      <div class="bg-white rounded shadow divide-y divide-gray-200">
-        <%= for entry <- @history do %>
-          <div class="flex items-center px-4 py-3 hover:bg-gray-100">
-            <div class="w-40 text-xs text-gray-400"><%= Calendar.strftime(entry.time, "%a, %d %b %Y %H:%M") %></div>
-            <div class="ml-4 text-gray-800"><%= entry.info %></div>
+            </div>
           </div>
         <% end %>
-        <%= if Enum.empty?(@history) do %>
-          <div class="px-4 py-6 text-gray-400 text-center">No history yet.</div>
+        <%= if Enum.empty?(filter_games_by_tab(@games, @tab)) do %>
+          <p class="text-gray-400 text-center">No games in this category.</p>
         <% end %>
       </div>
     </div>
+
   <% "bets" -> %>
     <div class="mt-8 mb-8 max-w-2xl mx-auto">
-      <button phx-click="show_games" class="mb-4 text-gray-600 hover:underline flex items-center"><svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>Back to Games</button>
+      <button phx-click="show_games" class="mb-4 text-gray-600 hover:underline flex items-center">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to Games
+      </button>
       <h3 class="text-xl font-bold mb-4 text-gray-700">Bets Placed</h3>
       <div class="bg-white rounded shadow divide-y divide-gray-200">
-        <%= for bet <- @bets do %>
+        <%= for bet <- @placed_bets do %>
           <div class="flex items-center px-4 py-3 hover:bg-gray-100">
-            <div class="w-40 text-xs text-gray-400"><%= Calendar.strftime(bet.time, "%a, %d %b %Y %H:%M") %></div>
+            <div class="w-40 text-xs text-gray-400"><%= Calendar.strftime(bet.inserted_at, "%a, %d %b %Y %H:%M") %></div>
             <div class="ml-4 flex-1">
-              <div class="text-gray-800 font-semibold"><%= bet.desc %></div>
-              <div class="text-sm text-gray-600">Odds: <%= bet.odds %> | Amount: $<%= bet.amount %> | Status: <%= Atom.to_string(bet.status) %></div>
+              <div class="text-gray-800 font-semibold">
+                <%= for selection <- bet.selections do %>
+                  <div><%= selection.game_desc %> (<%= selection.selection_type %>)</div>
+                <% end %>
+              </div>
+              <div class="text-sm text-gray-600">
+                Total Odds: <%= bet.total_odds %> | 
+                Stake: KSH <%= Decimal.round(bet.stake_amount, 2) %> | 
+                Potential Win: KSH <%= Decimal.round(bet.potential_win, 2) %> |
+                Status: <%= String.capitalize(bet.status) %>
+              </div>
             </div>
             <div class="ml-4">
-              <%= if Enum.all?(bet.games_status, &(&1 == :upcoming)) do %>
+              <%= if bet.status == "pending" do %>
                 <button phx-click="cancel_bet" phx-value-bet_id={bet.id} class="text-red-600 hover:underline">Cancel</button>
               <% else %>
                 <span class="text-gray-400 text-xs">Cannot cancel</span>
@@ -155,51 +156,102 @@
             </div>
           </div>
         <% end %>
-        <%= if Enum.empty?(@bets) do %>
+        <%= if Enum.empty?(@placed_bets) do %>
           <div class="px-4 py-6 text-gray-400 text-center">No bets placed yet.</div>
         <% end %>
       </div>
     </div>
 <% end %>
 
-<!-- Bet Slip Sidebar/Modal -->
+<!-- Bet Slip Sidebar -->
 <%= if @current_user && @bet_slip && Enum.any?(@bet_slip) do %>
-<div id="bet-slip" class="fixed top-0 right-0 h-full w-80 bg-white shadow-lg z-50">
-  <div class="flex items-center justify-between p-4 border-b border-gray-200">
-    <h3 class="text-lg font-bold text-gray-800">Bet Slip</h3>
-    <button phx-click="toggle_bet_slip" class="text-gray-500 hover:text-gray-700">&times;</button>
+  <div id="bet-slip-overlay" phx-click="toggle_bet_slip" class={"fixed inset-0 bg-black bg-opacity-30 transition-opacity pointer-events-none #{if @bet_slip_open, do: "opacity-100", else: "opacity-0"}"}>
   </div>
-  <div class="p-4">
-    <ul>
-      <%= for bet <- @bet_slip do %>
-        <li class="mb-2 flex justify-between items-center gap-2">
-          <span class="text-gray-700"><%= bet.game_desc %> (<%= bet.type %>)</span>
-          <span class="font-semibold text-gray-800">@ <%= bet.odds %></span>
-          <input type="number" min="1" value={bet.stake || 1} phx-change="update_stake" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} name="stake" class="w-16 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm" />
-          <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="ml-2 text-gray-400 hover:text-red-500 text-lg font-bold">&times;</button>
-        </li>
-      <% end %>
-    </ul>
-    <div class="mt-4 flex justify-between items-center">
-      <button phx-click="clear_bet_slip" class="text-gray-500 hover:text-red-500 text-sm">Clear All</button>
-      <button class="bg-gray-800 text-white px-4 py-2 rounded">Place Bets</button>
+  <div id="bet-slip" phx-click-away="save_and_close_bet_slip" class={"fixed top-0 right-0 h-full w-80 bg-white shadow-lg z-50 transform transition-transform duration-300 ease-in-out #{if @bet_slip_open, do: "translate-x-0", else: "translate-x-full"}"}>
+    <div class="flex items-center justify-between p-4 border-b border-gray-200">
+      <h3 class="text-lg font-bold text-gray-800">Bet Slip</h3>
+      <button phx-click="clear_bet_slip" class="text-gray-500 hover:text-gray-700 px-2 py-1">Cancel All</button>
+    </div>
+    <div class="p-4">
+      <ul class="space-y-4">
+        <%= for bet <- @bet_slip do %>
+          <li class="flex flex-col gap-2 pb-4 border-b border-gray-100">
+            <div class="flex justify-between items-start">
+              <span class="text-gray-700"><%= bet.game_desc %> (<%= bet.type %>)</span>
+              <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="text-gray-500 hover:text-red-500">Cancel</button>
+            </div>
+            <span class="font-semibold text-gray-800">@ <%= bet.odds %></span>
+          </li>
+        <% end %>
+      </ul>
+      <div class="mt-6 space-y-4">
+        <form phx-change="update_stake">
+          <div class="flex justify-between items-center">
+            <label class="text-gray-700 font-medium">Stake Amount:</label>
+            <input type="number"
+                   min="0"
+                   step="50"
+                   value={if @bet_stake in [nil, "", 0], do: "", else: @bet_stake}
+                   name="stake"
+                   autocomplete="off"
+                   inputmode="numeric"
+                   class="w-24 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
+            />
+          </div>
+        </form>
+        <div class="flex justify-between items-center text-sm">
+          <span class="text-gray-600">Total Odds:</span>
+          <span class="font-semibold">
+            <%= Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) |> Float.round(2) %>
+          </span>
+        </div>
+        <div class="flex justify-between items-center text-sm">
+          <span class="text-gray-600">Potential Win:</span>
+          <span class="font-semibold text-green-600">
+            KSH <%= (Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) * (@bet_stake || 1)) |> Float.round(2) %>
+          </span>
+        </div>
+        <button phx-click="place_bets" class="w-full bg-gray-800 text-white px-4 py-2 rounded font-semibold hover:bg-gray-700 transition">Place Bets</button>
+      </div>
     </div>
   </div>
-</div>
 <% end %>
 
-<div class="mt-2 text-xs text-gray-400">
-  <pre>DEBUG: @current_user = <%= inspect(@current_user) %></pre>
-</div>
+<%= if @show_deposit_modal do %>
+  <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-96 relative">
+      <button phx-click="hide_deposit_modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+      <h2 class="text-xl font-bold mb-4">Deposit Funds</h2>
+      <form phx-submit="submit_deposit">
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-bold mb-2">Amount (KSH)</label>
+          <input type="number" name="amount" min="1" step="1" required
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-brand"
+            placeholder="Enter amount to deposit"
+          />
+        </div>
+        <button type="submit" class="w-full bg-black text-white px-4 py-2 rounded font-semibold transition hover:bg-brand">
+          Deposit
+        </button>
+      </form>
+    </div>
+  </div>
+<% end %>
 
 <script>
   // Toggle bet slip sidebar
   window.addEventListener("phx:bet_slip_open", function() {
     document.getElementById("bet-slip").classList.remove("translate-x-full");
     document.getElementById("bet-slip").classList.add("translate-x-0");
+    document.getElementById("bet-slip-overlay").classList.remove("opacity-0", "pointer-events-none");
   });
   window.addEventListener("phx:bet_slip_close", function() {
     document.getElementById("bet-slip").classList.remove("translate-x-0");
     document.getElementById("bet-slip").classList.add("translate-x-full");
+    document.getElementById("bet-slip-overlay").classList.add("opacity-0", "pointer-events-none");
   });
 </script> 

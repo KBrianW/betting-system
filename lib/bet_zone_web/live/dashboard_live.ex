@@ -4,11 +4,13 @@ defmodule BetZoneWeb.DashboardLive do
   # on_mount {BetZoneWeb.UserAuth, :ensure_authenticated}
   alias BetZone.Teams
   alias BetZone.Games
+  alias BetZone.Bets
   alias Timex.Timex
+  alias BetZone.Transactions
 
   @weeks 8
   @games_per_week 8
-  @season_start Date.utc_today() |> Date.beginning_of_week(:monday)
+  @season_start ~D[2024-06-24]
 
   @impl true
   def mount(_params, session, socket) do
@@ -26,52 +28,38 @@ defmodule BetZoneWeb.DashboardLive do
     games = decorate_games(games, now)
     games = sort_games_by_time(games)
 
-    # Sample/mock data for history and bets
-    history = [
-      %{time: NaiveDateTime.utc_now(), info: "You gained $50 from winning a bet."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -2 * 60 * 60), info: "Game between Team A and Team B was postponed."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -1 * 24 * 60 * 60), info: "Insufficient funds for bet on Team C vs Team D."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -2 * 24 * 60 * 60), info: "You lost $20 on Team E vs Team F."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -3 * 24 * 60 * 60), info: "Game between Team G and Team H was cancelled."}
-    ]
-    bets = [
-      %{id: 1, time: NaiveDateTime.add(NaiveDateTime.utc_now(), -1 * 60 * 60), desc: "Team A vs Team B (Win)", odds: 2.1, amount: 20, status: :pending, games_status: [:upcoming]},
-      %{id: 2, time: NaiveDateTime.add(NaiveDateTime.utc_now(), -1 * 24 * 60 * 60), desc: "Team C vs Team D (Draw)", odds: 3.2, amount: 15, status: :pending, games_status: [:ongoing]},
-      %{id: 3, time: NaiveDateTime.add(NaiveDateTime.utc_now(), -2 * 24 * 60 * 60), desc: "Team E vs Team F (Loss)", odds: 1.8, amount: 10, status: :lost, games_status: [:completed]}
-    ]
-
-    {bet_slip, selected_odds} =
-      case session["intended_bet"] do
-        nil -> {[], %{}}
-        intended ->
-          game = Enum.find(games, &("#{&1.id}" == intended["game_id"]))
-          if game do
-            bet_type = String.capitalize(intended["bet_type"])
-            odds = case intended["bet_type"] do
-              "win" -> game.odds.win
-              "draw" -> game.odds.draw
-              "loss" -> game.odds.loss
-              _ -> game.odds.win
-            end
-            bet = %{
-              game_id: game.id,
-              game_desc: "#{game.team_a} vs #{game.team_b}",
-              type: bet_type,
-              odds: odds,
-              stake: 1
-            }
-            {[bet], Map.put(%{}, {game.id, bet_type}, true)}
-          else
-            {[], %{}}
-          end
-      end
-
     # Assign current_user if present in session
     current_user =
       if user_token = session["user_token"] do
         BetZone.Accounts.get_user_by_session_token(user_token)
       else
         nil
+      end
+
+    # Load placed bets if user is logged in
+    placed_bets =
+      if current_user do
+        Bets.list_placed_bets(current_user.id)
+        |> Bets.preload_selections()
+      else
+        []
+      end
+
+    # Load draft bets if user is logged in
+    bet_slip =
+      if current_user do
+        Bets.list_draft_bets(current_user.id)
+        |> Enum.map(fn draft ->
+          %{
+            game_id: draft.game_id,
+            game_desc: draft.game_desc,
+            type: draft.type,
+            odds: draft.odds,
+            stake: draft.stake
+          }
+        end)
+      else
+        []
       end
 
     {:ok,
@@ -88,11 +76,11 @@ defmodule BetZoneWeb.DashboardLive do
      |> assign(:bet_slip, bet_slip)
      |> assign(:bet_slip_open, bet_slip != [])
      |> assign(:dashboard_view, "games")
-     |> assign(:history, history)
-     |> assign(:bets, bets)
-     |> assign(:selected_odds, selected_odds)
+     |> assign(:placed_bets, placed_bets)
+     |> assign(:selected_odds, %{})
      |> assign(:current_user, current_user)
-    }
+     |> assign(:bet_stake, nil)
+     |> assign(:show_deposit_modal, false)}
   end
 
   @impl true
@@ -174,7 +162,7 @@ defmodule BetZoneWeb.DashboardLive do
           game_desc: "#{game.team_a} vs #{game.team_b}",
           type: String.capitalize(bet_type),
           odds: odds,
-          stake: 1
+          stake: socket.assigns[:bet_stake] || 1
         }
         bet_slip = socket.assigns.bet_slip || []
         # Remove any existing bet for this game
@@ -236,32 +224,171 @@ defmodule BetZoneWeb.DashboardLive do
   end
 
   @impl true
-  def handle_event("remove_bet", %{"game_id" => game_id, "bet_type" => bet_type}, socket) do
-    bet_slip = socket.assigns.bet_slip || []
-    selected_odds = socket.assigns.selected_odds || %{}
-    bet_type_cap = String.capitalize(bet_type)
-    bet_slip = Enum.reject(bet_slip, &(&1.game_id == String.to_integer(game_id) and &1.type == bet_type_cap))
-    selected_odds = Map.delete(selected_odds, {String.to_integer(game_id), bet_type_cap})
-    {:noreply, assign(socket, bet_slip: bet_slip, selected_odds: selected_odds)}
+  def handle_event("save_and_close_bet_slip", _params, socket) do
+    if socket.assigns.current_user do
+      Bets.save_bet_slip(socket.assigns.current_user.id, socket.assigns.bet_slip)
+    end
+
+    {:noreply,
+     socket
+     |> assign(:bet_slip_open, false)}
   end
 
   @impl true
   def handle_event("clear_bet_slip", _params, socket) do
-    {:noreply, assign(socket, bet_slip: [], selected_odds: %{})}
+    if socket.assigns.current_user do
+      Bets.delete_all_draft_bets(socket.assigns.current_user.id)
+    end
+
+    {:noreply,
+     socket
+     |> assign(:bet_slip, [])
+     |> assign(:selected_odds, %{})
+     |> assign(:bet_slip_open, false)}
   end
 
   @impl true
-  def handle_event("update_stake", %{"game_id" => game_id, "bet_type" => bet_type, "stake" => stake}, socket) do
-    bet_slip = socket.assigns.bet_slip || []
+  def handle_event("remove_bet", %{"game_id" => game_id, "bet_type" => bet_type}, socket) do
+    game_id = String.to_integer(game_id)
     bet_type_cap = String.capitalize(bet_type)
-    bet_slip = Enum.map(bet_slip, fn bet ->
-      if bet.game_id == String.to_integer(game_id) and bet.type == bet_type_cap do
-        Map.put(bet, :stake, String.to_integer(stake))
+
+    bet_slip = Enum.reject(socket.assigns.bet_slip, &(&1.game_id == game_id and &1.type == bet_type_cap))
+    selected_odds = Map.delete(socket.assigns.selected_odds, {game_id, bet_type_cap})
+
+    # Save the updated bet slip only if not empty, otherwise delete all drafts
+    if socket.assigns.current_user do
+      if Enum.any?(bet_slip) do
+        Bets.save_bet_slip(socket.assigns.current_user.id, bet_slip)
       else
-        bet
+        Bets.delete_all_draft_bets(socket.assigns.current_user.id)
       end
-    end)
-    {:noreply, assign(socket, bet_slip: bet_slip)}
+    end
+
+    {:noreply,
+     socket
+     |> assign(:bet_slip, bet_slip)
+     |> assign(:selected_odds, selected_odds)
+     |> assign(:bet_slip_open, bet_slip != [])}
+  end
+
+  @impl true
+  def handle_event("update_all_stakes", %{"stake" => stake}, socket) do
+    {stake, _} = Integer.parse(stake)
+    bet_slip = Enum.map(socket.assigns.bet_slip, fn bet -> Map.put(bet, :stake, stake) end)
+
+    # Save the updated bet slip
+    if socket.assigns.current_user do
+      Bets.save_bet_slip(socket.assigns.current_user.id, bet_slip)
+    end
+
+    {:noreply,
+     socket
+     |> assign(:bet_slip, bet_slip)
+     |> assign(:bet_stake, stake)}
+  end
+
+  @impl true
+  def handle_event("update_stake", %{"stake" => stake}, socket) do
+    stake =
+      case Integer.parse(stake) do
+        {val, _} when val > 0 -> val
+        _ -> nil
+      end
+    bet_slip = Enum.map(socket.assigns.bet_slip, fn bet -> Map.put(bet, :stake, stake) end)
+    {:noreply, assign(socket, bet_stake: stake, bet_slip: bet_slip)}
+  end
+
+  @impl true
+  def handle_event("redirect_to_login", _params, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:info, "Please log in to place bets.")
+     |> redirect(to: ~p"/users/log_in")}
+  end
+
+  @impl true
+  def handle_event("show_deposit_modal", _params, socket) do
+    {:noreply, assign(socket, show_deposit_modal: true)}
+  end
+
+  @impl true
+  def handle_event("hide_deposit_modal", _params, socket) do
+    {:noreply, assign(socket, show_deposit_modal: false)}
+  end
+
+  @impl true
+  def handle_event("submit_deposit", %{"amount" => amount}, socket) do
+    try do
+      # Validate amount is a valid decimal, but pass as string to create_deposit
+      _ = Decimal.new(amount)
+      case Transactions.create_deposit(socket.assigns.current_user, amount) do
+        {:ok, _transaction} ->
+          # Reload the current user to get updated wallet balance
+          current_user = BetZone.Accounts.get_user!(socket.assigns.current_user.id)
+          {:noreply,
+           socket
+           |> assign(:current_user, current_user)
+           |> assign(:show_deposit_modal, false)
+           |> put_flash(:info, "Successfully deposited KSH #{amount}")}
+        {:error, _changeset} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to process deposit")
+           |> assign(:show_deposit_modal, false)}
+      end
+    rescue
+      _ ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Invalid amount")
+         |> assign(:show_deposit_modal, false)}
+    end
+  end
+
+  @impl true
+  def handle_event("place_bets", _params, socket) do
+    user = socket.assigns.current_user
+    bet_slip = socket.assigns.bet_slip
+    total_stake = socket.assigns.bet_stake * length(bet_slip)
+    total_odds = Enum.reduce(bet_slip, 1, fn bet, acc -> acc * bet.odds end)
+    potential_win = total_odds * socket.assigns.bet_stake
+
+    if user.wallet >= total_stake do
+      # Create the placed bet
+      placed_bet_attrs = %{
+        user_id: user.id,
+        total_odds: total_odds,
+        stake_amount: total_stake,
+        potential_win: potential_win,
+        status: "pending"
+      }
+
+      case Bets.create_placed_bet(placed_bet_attrs, bet_slip) do
+        {:ok, placed_bet} ->
+          # Create transaction for the bet placement
+          {:ok, _transaction} = Transactions.create_bet_transaction(user, placed_bet, "bet_place")
+
+          # Clear the bet slip
+          Bets.delete_all_draft_bets(user.id)
+
+          {:noreply,
+           socket
+           |> assign(:bet_slip, [])
+           |> assign(:selected_odds, %{})
+           |> assign(:bet_slip_open, false)
+           |> put_flash(:info, "Bets placed successfully!")}
+
+        {:error, _changeset} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to place bets. Please try again.")}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Insufficient funds. Please deposit more money.")
+       |> assign(:show_deposit_modal, true)}
+    end
   end
 
   defp week_number(now, season_start) do

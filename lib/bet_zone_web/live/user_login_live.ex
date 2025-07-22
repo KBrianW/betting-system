@@ -1,42 +1,56 @@
 defmodule BetZoneWeb.UserLoginLive do
   use BetZoneWeb, :live_view
 
+  alias BetZone.Accounts
+  alias BetZoneWeb.UserAuth
+
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-sm">
-      <.header class="text-center text-2xl font-bold mb-4">Log in to your account</.header>
-      <%= if @flash[:error] do %>
-        <div class="mb-4 text-red-600"><%= @flash[:error] %></div>
-      <% end %>
-      <form method="post" action="/users/log_in" id="login_form">
-        <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
-        <div class="mb-4">
-          <label for="user_email" class="block text-sm font-medium">Email</label>
-          <input type="email" name="user[email]" id="user_email" required class="w-full border rounded px-3 py-2" value={@email || ""} />
-        </div>
-        <div class="mb-4">
-          <label for="user_password" class="block text-sm font-medium">Password</label>
-          <input type="password" name="user[password]" id="user_password" required class="w-full border rounded px-3 py-2" />
-        </div>
-        <div class="mb-4 flex items-center">
-          <input type="checkbox" name="user[remember_me]" id="user_remember_me" class="mr-2" />
-          <label for="user_remember_me" class="text-sm">Keep me logged in</label>
-        </div>
-        <div class="mb-4 flex justify-between items-center">
-          <a href="/users/reset_password" class="text-sm text-blue-600 hover:underline">Forgot your password?</a>
-          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Log in →</button>
-        </div>
-        <div class="text-center text-sm">
-          Don't have an account?
-          <a href="/users/register" class="text-blue-600 hover:underline">Sign up</a>
-          for an account now.
-        </div>
-      </form>
+      <.header class="text-center">
+        Log in to your account
+        <:subtitle>
+          Don’t have an account?
+          <.link navigate={~p"/users/register"} class="font-semibold text-brand hover:underline">
+            Register
+          </.link>
+          for a new account now.
+        </:subtitle>
+      </.header>
+
+      <.simple_form
+        for={@form}
+        id="login_form"
+        action={~p"/users/log_in"}
+        method="post"
+        autocomplete="off"
+      >
+        <.error :if={@form.errors != []}>
+          Invalid email or password.
+        </.error>
+
+        <.input field={@form[:email]} type="email" label="Email" required autocomplete="off" />
+        <.input field={@form[:password]} type="password" label="Password" required autocomplete="new-password" />
+
+        <:actions>
+          <div class="flex flex-col space-y-4 w-full">
+            <.input field={@form[:remember_me]} type="checkbox" label="Keep me logged in" class="w-auto" />
+            <.button phx-disable-with="Logging in..." class="w-full">Log in →</.button>
+            <.link navigate={~p"/users/reset_password"} class="text-sm text-brand hover:underline text-center">
+              Forgot your password?
+            </.link>
+          </div>
+        </:actions>
+      </.simple_form>
     </div>
     """
   end
 
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, email: "")}
+    form =
+      %{}
+      |> to_form(as: "user")
+
+    {:ok, assign(socket, form: form), temporary_assigns: [form: nil]}
   end
 end

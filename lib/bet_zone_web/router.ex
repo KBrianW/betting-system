@@ -25,8 +25,8 @@ defmodule BetZoneWeb.Router do
   end
 
   pipeline :root do
-    plug :put_root_layout, html: {BetZoneWeb.Layouts, :root}
-  end
+  plug :put_root_layout, html: {BetZoneWeb.Layouts, :root}
+end
 
   pipeline :api do
     plug :accepts, ["json"]
@@ -41,6 +41,7 @@ defmodule BetZoneWeb.Router do
     live "/rugby", OtherSportsLive, :rugby
     live "/volleyball", OtherSportsLive, :volleyball
     live "/hockey", OtherSportsLive, :hockey
+    live "/history", HistoryLive
   end
 
   # Super User Dashboard Scope

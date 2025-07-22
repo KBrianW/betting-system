@@ -28,6 +28,7 @@ defmodule BetZoneWeb.UserRegistrationLive do
         phx-trigger-action={@trigger_submit}
         action={~p"/users/log_in?_action=registered"}
         method="post"
+        autocomplete="off"
       >
         <.error :if={@check_errors}>
           Oops, something went wrong! Please check the errors below.
@@ -35,10 +36,10 @@ defmodule BetZoneWeb.UserRegistrationLive do
 
         <.input field={@form[:first_name]} type="text" label="First Name" required />
         <.input field={@form[:last_name]} type="text" label="Last Name" required />
-        <.input field={@form[:msisdn]} type="text" label="Phone Number" required />
+        <.input field={@form[:msisdn]} type="text" label="Phone Number" required autocomplete="off" />
 
-        <.input field={@form[:email]} type="email" label="Email" required />
-        <.input field={@form[:password]} type="password" label="Password" required />
+        <.input field={@form[:email]} type="email" label="Email" required autocomplete="off" />
+        <.input field={@form[:password]} type="password" label="Password" required autocomplete="new-password" />
 
         <:actions>
           <.button phx-disable-with="Creating account..." class="w-full">Create an account</.button>

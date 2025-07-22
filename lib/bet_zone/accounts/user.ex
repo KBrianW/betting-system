@@ -13,7 +13,7 @@ defmodule BetZone.Accounts.User do
     field :hashed_password, :string, redact: true
     field :current_password, :string, virtual: true, redact: true
     field :confirmed_at, :utc_datetime
-    field :wallet, :integer, default: 0
+    field :wallet, :decimal, default: 0
 
     timestamps(type: :utc_datetime)
   end

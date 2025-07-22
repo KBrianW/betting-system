@@ -7,7 +7,7 @@ defmodule BetZoneWeb.SuperPanelLive do
 
   @weeks 8
   @games_per_week 8
-  @season_start Date.utc_today() |> Date.beginning_of_week(:monday)
+  @season_start ~D[2024-06-24] 
 
   @impl true
   def mount(_params, session, socket) do
