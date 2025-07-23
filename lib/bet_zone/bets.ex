@@ -69,8 +69,9 @@ defmodule BetZone.Bets do
           type: bet.type,
           odds: bet.odds,
           stake: bet.stake,
-          inserted_at: NaiveDateTime.utc_now(),
-          updated_at: NaiveDateTime.utc_now()
+          status: "pending",
+          inserted_at: Timex.now() |> DateTime.truncate(:second),
+          updated_at: Timex.now() |> DateTime.truncate(:second)
         }
       end)
 
@@ -79,7 +80,7 @@ defmodule BetZone.Bets do
 
   def list_draft_bets(user_id) do
     from(d in "draft_bets",
-      where: d.user_id == ^user_id,
+      where: d.user_id == ^user_id and d.status == "pending",
       select: %{
         game_id: d.game_id,
         game_desc: d.game_desc,
@@ -96,6 +97,11 @@ defmodule BetZone.Bets do
     |> Repo.delete_all()
   end
 
+  def clear_draft_bets(user_id) do
+    from(d in "draft_bets", where: d.user_id == ^user_id)
+    |> Repo.update_all(set: [status: "cleared"])
+  end
+
   def get_placed_bet!(id), do: Repo.get!(PlacedBet, id)
 
   def update_placed_bet(%PlacedBet{} = placed_bet, attrs) do
@@ -106,5 +112,23 @@ defmodule BetZone.Bets do
 
   def delete_placed_bet(%PlacedBet{} = placed_bet) do
     Repo.delete(placed_bet)
+  end
+
+  def cancel_bet(%PlacedBet{} = placed_bet) do
+    Repo.transaction(fn ->
+      # 1. Update the bet status to "cancelled"
+      changeset = Ecto.Changeset.change(placed_bet, status: "cancelled")
+      Repo.update!(changeset)
+
+      # 2. Create a refund transaction
+      BetZone.Transactions.create_refund_transaction(
+        placed_bet.user,
+        placed_bet,
+        "bet_cancel"
+      )
+
+      # 3. Return the updated bet
+      placed_bet
+    end)
   end
 end

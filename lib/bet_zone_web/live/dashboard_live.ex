@@ -7,6 +7,7 @@ defmodule BetZoneWeb.DashboardLive do
   alias BetZone.Bets
   alias Timex.Timex
   alias BetZone.Transactions
+  alias BetZone.UserHistories
 
   @weeks 8
   @games_per_week 8
@@ -80,7 +81,10 @@ defmodule BetZoneWeb.DashboardLive do
      |> assign(:selected_odds, %{})
      |> assign(:current_user, current_user)
      |> assign(:bet_stake, nil)
-     |> assign(:show_deposit_modal, false)}
+     |> assign(:show_deposit_modal, false)
+     |> assign(:history, UserHistories.list_user_histories(current_user.id))
+     |> assign(:show_bet_modal, false)
+     |> assign(:selected_bet, nil)}
   end
 
   @impl true
@@ -209,17 +213,45 @@ defmodule BetZoneWeb.DashboardLive do
   @impl true
   def handle_event("cancel_bet", %{"bet_id" => bet_id}, socket) do
     bet_id = String.to_integer(bet_id)
-    bets = socket.assigns.bets
-    bet = Enum.find(bets, &(&1.id == bet_id))
-    # Only allow cancel if all games in bet are upcoming
-    if bet && Enum.all?(bet.games_status, &(&1 == :upcoming)) do
-      # Refund wallet logic would go here
-      bets = Enum.reject(bets, &(&1.id == bet_id))
-      # Add a history entry for refund
-      history = [%{time: NaiveDateTime.utc_now(), info: "Bet ##{bet_id} cancelled. $#{bet.amount} refunded to wallet."} | socket.assigns.history]
-      {:noreply, assign(socket, bets: bets, history: history)}
+    placed_bets = socket.assigns.placed_bets
+    bet = Enum.find(placed_bets, &(&1.id == bet_id))
+
+    # Only allow cancel if the bet is pending
+    if bet && bet.status == "pending" do
+      case Bets.cancel_bet(bet) do
+        {:ok, cancelled_bet} ->
+          # Create a history entry
+          UserHistories.create_user_history(%{
+            user_id: socket.assigns.current_user.id,
+            info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
+            type: "bet_cancelled",
+            ref_id: cancelled_bet.id
+          })
+
+          # Reload placed bets and history
+          placed_bets =
+            if socket.assigns.current_user do
+              Bets.list_placed_bets(socket.assigns.current_user.id)
+              |> Bets.preload_selections()
+            else
+              []
+            end
+          history = UserHistories.list_user_histories(socket.assigns.current_user.id)
+
+          {:noreply,
+           socket
+           |> assign(:placed_bets, placed_bets)
+           |> assign(:history, history)
+           |> put_flash(:info, "Bet ##{bet_id} cancelled and refunded.")}
+        {:error, _} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to cancel bet.")}
+      end
     else
-      {:noreply, socket}
+      {:noreply,
+       socket
+       |> put_flash(:error, "Cannot cancel this bet.")}
     end
   end
 
@@ -237,7 +269,7 @@ defmodule BetZoneWeb.DashboardLive do
   @impl true
   def handle_event("clear_bet_slip", _params, socket) do
     if socket.assigns.current_user do
-      Bets.delete_all_draft_bets(socket.assigns.current_user.id)
+      Bets.clear_draft_bets(socket.assigns.current_user.id)
     end
 
     {:noreply,
@@ -294,9 +326,11 @@ defmodule BetZoneWeb.DashboardLive do
         {val, _} when val > 0 -> val
         _ -> nil
       end
-    bet_slip = Enum.map(socket.assigns.bet_slip, fn bet -> Map.put(bet, :stake, stake) end)
+    bet_slip = Enum.map(socket.assigns.bet_slip,
+      fn bet -> Map.put(bet, :stake, stake) end
+    )
     {:noreply, assign(socket, bet_stake: stake, bet_slip: bet_slip)}
-  end
+    end
 
   @impl true
   def handle_event("redirect_to_login", _params, socket) do
@@ -314,6 +348,16 @@ defmodule BetZoneWeb.DashboardLive do
   @impl true
   def handle_event("hide_deposit_modal", _params, socket) do
     {:noreply, assign(socket, show_deposit_modal: false)}
+  end
+
+  def handle_event("show_bet_modal", %{"bet_id" => bet_id}, socket) do
+    bet_id = String.to_integer(bet_id)
+    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
+    {:noreply, assign(socket, show_bet_modal: true, selected_bet: bet)}
+  end
+
+  def handle_event("hide_bet_modal", _params, socket) do
+    {:noreply, assign(socket, show_bet_modal: false, selected_bet: nil)}
   end
 
   @impl true
@@ -412,6 +456,7 @@ defmodule BetZoneWeb.DashboardLive do
   end
 
   defp generate_and_insert_games(teams, weeks, games_per_week, season_start_dt, cycle) do
+    IO.puts("Yoo, #{teams}")
     team_ids = Enum.map(teams, & &1.id)
     Enum.each(1..weeks, fn week ->
       week_start = DateTime.add(season_start_dt, ((cycle - 1) * weeks + (week - 1)) * 7 * 24 * 60 * 60, :second)

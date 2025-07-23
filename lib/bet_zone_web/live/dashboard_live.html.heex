@@ -132,27 +132,15 @@
       <h3 class="text-xl font-bold mb-4 text-gray-700">Bets Placed</h3>
       <div class="bg-white rounded shadow divide-y divide-gray-200">
         <%= for bet <- @placed_bets do %>
-          <div class="flex items-center px-4 py-3 hover:bg-gray-100">
+          <div class="flex items-center px-4 py-3 hover:bg-gray-100" phx-click="show_bet_modal" phx-value-bet_id={bet.id}>
             <div class="w-40 text-xs text-gray-400"><%= Calendar.strftime(bet.inserted_at, "%a, %d %b %Y %H:%M") %></div>
             <div class="ml-4 flex-1">
               <div class="text-gray-800 font-semibold">
-                <%= for selection <- bet.selections do %>
-                  <div><%= selection.game_desc %> (<%= selection.selection_type %>)</div>
-                <% end %>
+                Bet ID: <%= bet.id %>
               </div>
               <div class="text-sm text-gray-600">
-                Total Odds: <%= bet.total_odds %> | 
-                Stake: KSH <%= Decimal.round(bet.stake_amount, 2) %> | 
-                Potential Win: KSH <%= Decimal.round(bet.potential_win, 2) %> |
                 Status: <%= String.capitalize(bet.status) %>
               </div>
-            </div>
-            <div class="ml-4">
-              <%= if bet.status == "pending" do %>
-                <button phx-click="cancel_bet" phx-value-bet_id={bet.id} class="text-red-600 hover:underline">Cancel</button>
-              <% else %>
-                <span class="text-gray-400 text-xs">Cannot cancel</span>
-              <% end %>
             </div>
           </div>
         <% end %>
@@ -161,6 +149,7 @@
         <% end %>
       </div>
     </div>
+    <.live_component module={BetZoneWeb.BetModalComponent} id="bet-modal" show={@show_bet_modal} bet={@selected_bet} />
 <% end %>
 
 <!-- Bet Slip Sidebar -->
@@ -185,16 +174,13 @@
         <% end %>
       </ul>
       <div class="mt-6 space-y-4">
-        <form phx-change="update_stake">
+        <form debouce="300" phx-change="update_stake">
           <div class="flex justify-between items-center">
             <label class="text-gray-700 font-medium">Stake Amount:</label>
-            <input type="number"
-                   min="0"
-                   step="50"
-                   value={if @bet_stake in [nil, "", 0], do: "", else: @bet_stake}
+            <input type="text"
+                   value={@bet_stake}
                    name="stake"
                    autocomplete="off"
-                   inputmode="numeric"
                    class="w-24 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
             />
           </div>
@@ -202,13 +188,13 @@
         <div class="flex justify-between items-center text-sm">
           <span class="text-gray-600">Total Odds:</span>
           <span class="font-semibold">
-            <%= Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) |> Float.round(2) %>
+            <%= Enum.reduce(@bet_slip, 0, fn bet, acc -> acc + bet.odds end) |> Float.round(2) %>
           </span>
         </div>
         <div class="flex justify-between items-center text-sm">
           <span class="text-gray-600">Potential Win:</span>
           <span class="font-semibold text-green-600">
-            KSH <%= (Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) * (@bet_stake || 1)) |> Float.round(2) %>
+            KSH <%= (Enum.reduce(@bet_slip, 0, fn bet, acc -> acc + bet.odds end) * (@bet_stake || 0)) |> Float.round(2) %>
           </span>
         </div>
         <button phx-click="place_bets" class="w-full bg-gray-800 text-white px-4 py-2 rounded font-semibold hover:bg-gray-700 transition">Place Bets</button>

@@ -4,27 +4,51 @@ defmodule BetZone.Transactions do
   alias BetZone.Transactions.Transaction
   alias BetZone.Accounts.User
   alias BetZone.Games
-
+  @moduledoc """
+  asdasfasdas
+  """
   def create_bet_transaction(user, bet, type) when type in ["bet_place", "bet_win", "bet_loss"] do
-    description = case type do
-      "bet_place" -> "Bet placed on #{format_bet_selections(bet)}"
-      "bet_win" -> "Won bet on #{format_bet_selections(bet)}"
-      "bet_loss" -> "Lost bet on #{format_bet_selections(bet)}"
-    end
+    Repo.transaction(fn ->
+      description = case type do
+        "bet_place" -> "Bet placed on #{format_bet_selections(bet)}"
+        "bet_win" -> "Won bet on #{format_bet_selections(bet)}"
+        "bet_loss" -> "Lost bet on #{format_bet_selections(bet)}"
+      end
 
-    amount = case type do
-      "bet_place" -> bet.stake_amount
-      "bet_win" -> bet.potential_win
-      "bet_loss" -> bet.stake_amount
-    end
+      amount = case type do
+        "bet_place" -> bet.stake_amount
+        "bet_win" -> bet.potential_win
+        "bet_loss" -> bet.stake_amount
+      end
 
-    create_transaction(%{
-      user_id: user.id,
-      amount: amount,
-      type: type,
-      status: "completed",
-      description: description
-    })
+      transaction_attrs = %{
+        user_id: user.id,
+        amount: amount,
+        type: type,
+        status: "completed",
+        description: description
+      }
+
+      with {:ok, transaction} <- create_transaction(transaction_attrs) do
+        wallet_update_amount =
+          case type do
+            "bet_place" -> Decimal.negate(bet.stake_amount)
+            "bet_win" -> bet.potential_win
+            _ -> Decimal.new(0)
+          end
+
+        if Decimal.compare(wallet_update_amount, Decimal.new(0)) != :eq do
+          case update_user_wallet(user, wallet_update_amount) do
+            {:ok, _} -> transaction
+            {:error, reason} -> Repo.rollback(reason)
+          end
+        else
+          transaction
+        end
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
   end
 
   def create_deposit(user, amount) do
@@ -153,5 +177,26 @@ defmodule BetZone.Transactions do
       "#{game.team_a_id} vs #{game.team_b_id} (#{selection.selection_type})"
     end)
     |> Enum.join(", ")
+  end
+
+  def create_refund_transaction(user, bet, type) when type in ["bet_cancel"] do
+    Repo.transaction(fn ->
+      description = "Refund for cancelled bet on #{format_bet_selections(bet)}"
+
+      transaction_attrs = %{
+        user_id: user.id,
+        amount: bet.stake_amount,
+        type: type,
+        status: "completed",
+        description: description
+      }
+
+      with {:ok, transaction} <- create_transaction(transaction_attrs),
+           {:ok, _} <- update_user_wallet(user, bet.stake_amount) do
+        transaction
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 end
