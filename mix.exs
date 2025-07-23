@@ -59,7 +59,8 @@ defmodule BetZone.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, ">= 0.0.0"},
-      {:number, "~> 1.0.1"}
+      {:number, "~> 1.0.1"},
+      {:timex, "~> 3.7"}
     ]
   end
 

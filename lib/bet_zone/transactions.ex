@@ -150,7 +150,7 @@ defmodule BetZone.Transactions do
     bet.selections
     |> Enum.map(fn selection ->
       game = Games.get_game!(selection.game_id)
-      "#{game.home_team} vs #{game.away_team} (#{selection.selection_type})"
+      "#{game.team_a_id} vs #{game.team_b_id} (#{selection.selection_type})"
     end)
     |> Enum.join(", ")
   end

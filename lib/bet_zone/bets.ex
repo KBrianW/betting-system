@@ -34,7 +34,11 @@ defmodule BetZone.Bets do
               game_id: bet.game_id,
               selection_type: String.downcase(bet.type),
               odds: bet.odds,
-              result: "pending"
+              result: "pending",
+              inserted_at: Timex.now() |> DateTime.truncate(:second),
+              updated_at: Timex.now() |> DateTime.truncate(:second)
+
+
             }
           end)
 
