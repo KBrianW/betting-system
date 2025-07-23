@@ -8,6 +8,7 @@ defmodule BetZone.Bets.BetSelection do
     field :result, :string  # won, lost, pending, cancelled
     belongs_to :placed_bet, BetZone.Bets.PlacedBet
     belongs_to :game, BetZone.Games.Game
+    field :game_desc, :string
 
     timestamps(type: :utc_datetime)
   end

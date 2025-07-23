@@ -32,6 +32,7 @@ defmodule BetZone.Bets do
             %{
               placed_bet_id: placed_bet.id,
               game_id: bet.game_id,
+              game_desc: bet.game_desc,
               selection_type: String.downcase(bet.type),
               odds: bet.odds,
               result: "pending",
