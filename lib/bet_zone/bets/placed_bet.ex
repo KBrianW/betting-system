@@ -9,6 +9,7 @@ defmodule BetZone.Bets.PlacedBet do
     field :potential_win, :decimal
     field :status, :string, default: "pending"  # pending, won, lost, cancelled
     field :settled_at, :utc_datetime
+    field :cancelled_at, :utc_datetime
     belongs_to :user, BetZone.Accounts.User
     has_many :selections, BetZone.Bets.BetSelection
 

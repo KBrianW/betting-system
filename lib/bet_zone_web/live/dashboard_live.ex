@@ -76,7 +76,9 @@ defmodule BetZoneWeb.DashboardLive do
        |> assign(:show_deposit_modal, false)
        |> assign(:history, UserHistories.list_user_histories(current_user.id))
        |> assign(:show_bet_modal, false)
-       |> assign(:selected_bet, nil)}
+       |> assign(:selected_bet, nil)
+       |> assign(:show_cancel_confirm, false)
+       |> assign(:bet_to_cancel, nil)}
     end
   end
 
@@ -204,52 +206,63 @@ defmodule BetZoneWeb.DashboardLive do
   end
 
   @impl true
-  def handle_event("cancel_bet", %{"bet_id" => bet_id}, socket) do
-    bet_id = String.to_integer(bet_id)
-    placed_bets = socket.assigns.placed_bets
-    bet = Enum.find(placed_bets, &(&1.id == bet_id))
-
-    # Only allow cancel if the bet is pending
-    if bet && bet.status == "pending" do
-      case Bets.cancel_bet(bet) do
-        {:ok, cancelled_bet} ->
-          # Create a history entry
-          UserHistories.create_user_history(%{
-            user_id: socket.assigns.current_user.id,
-            info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
-            type: "bet_cancelled",
-            ref_id: cancelled_bet.id
-          })
-
-          # Reload placed bets and history
-          placed_bets =
-            if socket.assigns.current_user do
-              Bets.list_placed_bets(socket.assigns.current_user.id)
-              |> Bets.preload_selections()
-            else
-              []
-            end
-          history = UserHistories.list_user_histories(socket.assigns.current_user.id)
-
-          {:noreply,
-           socket
-           |> assign(:placed_bets, placed_bets)
-           |> assign(:history, history)
-           |> put_flash(:info, "Bet ##{bet_id} cancelled.")
-           |> assign(:show_bet_modal, false)}
-        {:error, _} ->
-          {:noreply,
-           socket
-           |> put_flash(:error, "Failed to cancel bet.")
-           |> assign(:show_bet_modal, false)}
-      end
-    else
-      {:noreply,
-       socket
-       |> put_flash(:error, "Cannot cancel this bet.")
-       |> assign(:show_bet_modal, false)}
-    end
+  def handle_event("request_cancel_bet", %{"bet_id" => bet_id}, socket) do
+    {:noreply, assign(socket,
+      show_cancel_confirm: true,
+      bet_to_cancel: bet_id
+    )}
   end
+
+  @impl true
+def handle_event("hide_cancel_confirm", _, socket) do
+  {:noreply, assign(socket,
+    show_cancel_confirm: false,
+    bet_to_cancel: nil
+  )}
+end
+
+@impl true
+def handle_event("confirm_cancel_bet", %{"bet_id" => bet_id}, socket) do
+  socket = assign(socket, show_cancel_confirm: false)
+  handle_event("cancel_bet", %{"bet_id" => bet_id}, socket)
+end
+
+@impl true
+def handle_event("cancel_bet", %{"bet_id" => bet_id}, socket) do
+  bet_id = String.to_integer(bet_id)
+  bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
+
+  if bet && bet.status == "pending" do
+    case Bets.cancel_bet(bet) do
+      {:ok, cancelled_bet} ->
+        # Optimized update without full reload
+        updated_bets = Enum.map(socket.assigns.placed_bets, fn b ->
+          if b.id == bet_id, do: cancelled_bet, else: b
+        end)
+
+        UserHistories.create_user_history(%{
+          user_id: socket.assigns.current_user.id,
+          info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
+          type: "bet_cancelled",
+          ref_id: cancelled_bet.id
+        })
+
+        {:noreply,
+         socket
+         |> assign(:placed_bets, updated_bets)
+         |> put_flash(:info, "Bet ##{bet_id} cancelled.")}
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to cancel bet.")}
+    end
+  else
+    {:noreply,
+     socket
+     |> put_flash(:error, "Cannot cancel this bet - it may have already been processed.")}
+  end
+end
 
   @impl true
   def handle_event("save_and_close_bet_slip", _params, socket) do

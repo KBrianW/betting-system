@@ -150,7 +150,7 @@
             </div>
           </div>
           <%= if bet.status == "pending" do %>
-            <button phx-click="cancel_bet" phx-value-bet_id={bet.id} class="ml-4 text-red-500 hover:text-red-700 text-sm font-medium">Cancel</button>
+            <button phx-click="request_cancel_bet" phx-value-bet_id={bet.id} class="ml-4 text-red-500 hover:text-red-700 text-sm font-medium">Cancel</button>
           <% end %>
         </div>
       <% end %>
@@ -197,6 +197,36 @@
       </div>
       <.live_component module={BetZoneWeb.BetModalComponent} id="bet-modal" show={@show_bet_modal} bet={@selected_bet} />
     </div>
+<% end %>
+
+<!-- Cancellation Confirmation Modal -->
+<%= if @show_cancel_confirm do %>
+  <div class="fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+      <h3 class="text-lg font-bold mb-4">Confirm Cancellation</h3>
+      <p class="mb-6">Are you sure you want to cancel bet #<%= @bet_to_cancel %>?</p>
+      <div class="flex justify-end space-x-4">
+        <button 
+          phx-click="hide_cancel_confirm"
+          class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+        >
+          No, Keep It
+        </button>
+        <button 
+          phx-click="confirm_cancel_bet"
+          phx-value-bet_id={@bet_to_cancel}
+          class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Yes, Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<!-- Bet Slip Sidebar -->  <!-- This is your existing code -->
+<%= if @current_user && @bet_slip && Enum.any?(@bet_slip) do %>
+  [... existing bet slip code ...]
 <% end %>
 
 <!-- Bet Slip Sidebar -->

@@ -116,9 +116,12 @@ defmodule BetZone.Bets do
 
   def cancel_bet(%PlacedBet{} = placed_bet) do
     Repo.transaction(fn ->
-      placed_bet = Repo.preload(placed_bet, :user)
-      # 1. Update the bet status to "cancelled"
-      changeset = Ecto.Changeset.change(placed_bet, status: "cancelled")
+      changeset =
+        placed_bet
+        |> Ecto.Changeset.change(
+          status: "cancelled",
+          cancelled_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
       updated_bet = Repo.update!(changeset)
 
       # 2. Create a refund transaction
@@ -129,7 +132,7 @@ defmodule BetZone.Bets do
       )
 
       # 3. Return the updated bet
-      placed_bet
+      updated_bet
     end)
   end
 
