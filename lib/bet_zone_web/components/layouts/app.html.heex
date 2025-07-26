@@ -34,12 +34,12 @@
               </svg>
               <span>My Bets</span>
             </button>
-            <.link navigate={~p"/history"} class="flex items-center gap-1 text-gray-700 hover:text-gray-900">
+            <button phx-click="show_history" class="flex items-center gap-1 text-gray-700 hover:text-gray-900">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
               </svg>
               <span>History</span>
-            </.link>
+            </button>
             <div class="flex items-center gap-1 text-gray-700">
               <span class="text-gray-700 font-semibold">Hello, <%= @current_user.first_name %></span>
             </div>

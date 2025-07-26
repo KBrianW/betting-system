@@ -11,6 +11,7 @@
         <button phx-click="show_deposit_modal" class="ml-2 bg-black text-white px-4 py-2 rounded font-semibold transition hover:bg-brand">Deposit</button>
       </div>
     <% end %>
+    
     <!-- Week Selector as Row of Buttons -->
     <div class="flex items-center space-x-2 mt-4 mb-6">
       <span class="font-semibold mr-2 text-gray-700">Week:</span>
@@ -121,7 +122,46 @@
       </div>
     </div>
 
-  <% "bets" -> %>
+ <% "bets" -> %>
+  <div class="mt-8 mb-8 max-w-2xl mx-auto">
+    <button phx-click="show_games" class="mb-4 text-gray-600 hover:underline flex items-center">
+      <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to Games
+    </button>
+    <h3 class="text-xl font-bold mb-4 text-gray-700">Bets Placed</h3>
+    <div class="bg-white rounded shadow divide-y divide-gray-200">
+      <%= for bet <- @placed_bets, bet.status in ["pending", "active"] do %>
+        <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
+          <div class="flex flex-col flex-1 cursor-pointer" phx-click="show_bet_modal" phx-value-bet_id={bet.id}>
+            <div class="text-gray-800 font-semibold">Bet ID: <%= bet.id %></div>
+            <div class="text-xs text-gray-400 mb-1"><%= Calendar.strftime(bet.inserted_at, "%a, %d %b %Y %H:%M") %></div>
+            <div class="text-sm text-gray-600">Stake: KSH <%= bet.stake_amount %> | Odds: <%= bet.total_odds %> | Potential Win: KSH <%= bet.potential_win %></div>
+            <div class="text-sm mt-1">
+              Status:
+              <span class={
+                case bet.status do
+                  "pending" -> "text-yellow-600 font-semibold"
+                  "active" -> "text-blue-600 font-semibold"
+                  _ -> ""
+                end
+              }><%= String.capitalize(bet.status) %></span>
+            </div>
+          </div>
+          <%= if bet.status == "pending" do %>
+            <button phx-click="cancel_bet" phx-value-bet_id={bet.id} class="ml-4 text-red-500 hover:text-red-700 text-sm font-medium">Cancel</button>
+          <% end %>
+        </div>
+      <% end %>
+      <%= if Enum.empty?(Enum.filter(@placed_bets, fn bet -> bet.status in ["pending", "active"] end)) do %>
+        <div class="px-4 py-6 text-gray-400 text-center">No active or pending bets.</div>
+      <% end %>
+    </div>
+    <.live_component module={BetZoneWeb.BetModalComponent} id="bet-modal" show={@show_bet_modal} bet={@selected_bet} />
+  </div>
+
+  <% "history" -> %>
     <div class="mt-8 mb-8 max-w-2xl mx-auto">
       <button phx-click="show_games" class="mb-4 text-gray-600 hover:underline flex items-center">
         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -129,32 +169,39 @@
         </svg>
         Back to Games
       </button>
-      <h3 class="text-xl font-bold mb-4 text-gray-700">Bets Placed</h3>
+      <h3 class="text-xl font-bold mb-4 text-gray-700">Bet History</h3>
       <div class="bg-white rounded shadow divide-y divide-gray-200">
-        <%= for bet <- @placed_bets do %>
-          <div class="flex items-center px-4 py-3 hover:bg-gray-100" phx-click="show_bet_modal" phx-value-bet_id={bet.id}>
-            <div class="w-40 text-xs text-gray-400"><%= Calendar.strftime(bet.inserted_at, "%a, %d %b %Y %H:%M") %></div>
-            <div class="ml-4 flex-1">
-              <div class="text-gray-800 font-semibold">
-                Bet ID: <%= bet.id %>
-              </div>
-              <div class="text-sm text-gray-600">
-                Status: <%= String.capitalize(bet.status) %>
+        <%= for bet <- Enum.filter(@placed_bets, &(&1.status in ["won", "lost", "cancelled"])) do %>
+          <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
+            <div class="flex flex-col flex-1 cursor-pointer" phx-click="show_bet_modal" phx-value-bet_id={bet.id}>
+              <div class="text-gray-800 font-semibold">Bet ID: <%= bet.id %></div>
+              <div class="text-xs text-gray-400 mb-1"><%= Calendar.strftime(bet.inserted_at, "%a, %d %b %Y %H:%M") %></div>
+              <div class="text-sm text-gray-600">Stake: KSH <%= bet.stake_amount %> | Odds: <%= bet.total_odds %> | Potential Win: KSH <%= bet.potential_win %></div>
+              <div class="text-sm mt-1">
+                Status:
+                <span class={
+                  case bet.status do
+                    "won" -> "text-green-600 font-semibold"
+                    "lost" -> "text-red-600 font-semibold"
+                    "cancelled" -> "text-gray-500 font-semibold"
+                    _ -> ""
+                  end
+                }><%= String.capitalize(bet.status) %></span>
               </div>
             </div>
           </div>
         <% end %>
-        <%= if Enum.empty?(@placed_bets) do %>
-          <div class="px-4 py-6 text-gray-400 text-center">No bets placed yet.</div>
+        <%= if Enum.empty?(Enum.filter(@placed_bets, &(&1.status in ["won", "lost", "cancelled"]))) do %>
+          <div class="px-4 py-6 text-gray-400 text-center">No past bets.</div>
         <% end %>
       </div>
+      <.live_component module={BetZoneWeb.BetModalComponent} id="bet-modal" show={@show_bet_modal} bet={@selected_bet} />
     </div>
-    <.live_component module={BetZoneWeb.BetModalComponent} id="bet-modal" show={@show_bet_modal} bet={@selected_bet} />
 <% end %>
 
 <!-- Bet Slip Sidebar -->
 <%= if @current_user && @bet_slip && Enum.any?(@bet_slip) do %>
-  <div id="bet-slip-overlay" phx-click="toggle_bet_slip" class={"fixed inset-0 bg-black bg-opacity-30 transition-opacity pointer-events-none #{if @bet_slip_open, do: "opacity-100", else: "opacity-0"}"}>
+  <div id="bet-slip-overlay" phx-click="toggle_bet_slip" class={"fixed inset-0 bg-black bg-opacity-30 transition-opacity #{if @bet_slip_open, do: "opacity-100", else: "opacity-0 pointer-events-none"}"}>
   </div>
   <div id="bet-slip" phx-click-away="save_and_close_bet_slip" class={"fixed top-0 right-0 h-full w-80 bg-white shadow-lg z-50 transform transition-transform duration-300 ease-in-out #{if @bet_slip_open, do: "translate-x-0", else: "translate-x-full"}"}>
     <div class="flex items-center justify-between p-4 border-b border-gray-200">
@@ -188,13 +235,13 @@
         <div class="flex justify-between items-center text-sm">
           <span class="text-gray-600">Total Odds:</span>
           <span class="font-semibold">
-            <%= Enum.reduce(@bet_slip, 0, fn bet, acc -> acc + bet.odds end) |> Float.round(2) %>
+            <%= Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) |> Float.round(2) %>
           </span>
         </div>
         <div class="flex justify-between items-center text-sm">
           <span class="text-gray-600">Potential Win:</span>
           <span class="font-semibold text-green-600">
-            KSH <%= (Enum.reduce(@bet_slip, 0, fn bet, acc -> acc + bet.odds end) * (@bet_stake || 0)) |> Float.round(2) %>
+            KSH <%= (Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) * (@bet_stake || 0)) |> Float.round(2) %>
           </span>
         </div>
         <button phx-click="place_bets" class="w-full bg-gray-800 text-white px-4 py-2 rounded font-semibold hover:bg-gray-700 transition">Place Bets</button>
@@ -240,4 +287,4 @@
     document.getElementById("bet-slip").classList.add("translate-x-full");
     document.getElementById("bet-slip-overlay").classList.add("opacity-0", "pointer-events-none");
   });
-</script> 
+</script>

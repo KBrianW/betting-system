@@ -15,21 +15,6 @@ defmodule BetZoneWeb.DashboardLive do
 
   @impl true
   def mount(_params, session, socket) do
-    teams = Teams.list_teams()
-    now = DateTime.utc_now()
-    current_week = week_number(now, @season_start)
-    cycle = div(current_week - 1, @weeks) + 1
-    week = rem(current_week - 1, @weeks) + 1
-
-    if Games.list_games_by_cycle(cycle) == [] do
-      generate_and_insert_games(teams, @weeks, @games_per_week, @season_start |> DateTime.new!(~T[00:00:00], "Etc/UTC"), cycle)
-    end
-
-    games = Games.list_games_by_week_and_cycle(week, cycle)
-    games = decorate_games(games, now)
-    games = sort_games_by_time(games)
-
-    # Assign current_user if present in session
     current_user =
       if user_token = session["user_token"] do
         BetZone.Accounts.get_user_by_session_token(user_token)
@@ -37,18 +22,28 @@ defmodule BetZoneWeb.DashboardLive do
         nil
       end
 
-    # Load placed bets if user is logged in
-    placed_bets =
-      if current_user do
-        Bets.list_placed_bets(current_user.id)
-        |> Bets.preload_selections()
-      else
-        []
+    if is_nil(current_user) do
+      {:ok, Phoenix.LiveView.redirect(socket, to: "/users/log_in")}
+    else
+      teams = Teams.list_teams()
+      now = DateTime.utc_now()
+      current_week = week_number(now, @season_start)
+      cycle = div(current_week - 1, @weeks) + 1
+      week = rem(current_week - 1, @weeks) + 1
+
+      if Games.list_games_by_cycle(cycle) == [] do
+        generate_and_insert_games(teams, @weeks, @games_per_week, @season_start |> DateTime.new!(~T[00:00:00], "Etc/UTC"), cycle)
       end
 
-    # Load draft bets if user is logged in
-    bet_slip =
-      if current_user do
+      games = Games.list_games_by_week_and_cycle(week, cycle)
+      games = decorate_games(games, now)
+      games = sort_games_by_time(games)
+
+      # Load placed bets if user is logged in
+      placed_bets = Bets.evaluate_and_update_user_bets(current_user.id)
+
+      # Load draft bets if user is logged in
+      bet_slip =
         Bets.list_draft_bets(current_user.id)
         |> Enum.map(fn draft ->
           %{
@@ -59,32 +54,30 @@ defmodule BetZoneWeb.DashboardLive do
             stake: draft.stake
           }
         end)
-      else
-        []
-      end
 
-    {:ok,
-     socket
-     |> assign(:sport, "football")
-     |> assign(:week, week)
-     |> assign(:tab, "upcoming")
-     |> assign(:games, games)
-     |> assign(:filtered_games, filter_and_sort_games(games, "upcoming"))
-     |> assign(:now, now)
-     |> assign(:cycle, cycle)
-     |> assign(:teams, teams)
-     |> assign(:season_start, @season_start)
-     |> assign(:bet_slip, bet_slip)
-     |> assign(:bet_slip_open, bet_slip != [])
-     |> assign(:dashboard_view, "games")
-     |> assign(:placed_bets, placed_bets)
-     |> assign(:selected_odds, %{})
-     |> assign(:current_user, current_user)
-     |> assign(:bet_stake, nil)
-     |> assign(:show_deposit_modal, false)
-     |> assign(:history, UserHistories.list_user_histories(current_user.id))
-     |> assign(:show_bet_modal, false)
-     |> assign(:selected_bet, nil)}
+      {:ok,
+       socket
+       |> assign(:sport, "football")
+       |> assign(:week, week)
+       |> assign(:tab, "upcoming")
+       |> assign(:games, games)
+       |> assign(:filtered_games, filter_and_sort_games(games, "upcoming"))
+       |> assign(:now, now)
+       |> assign(:cycle, cycle)
+       |> assign(:teams, teams)
+       |> assign(:season_start, @season_start)
+       |> assign(:bet_slip, bet_slip)
+       |> assign(:bet_slip_open, bet_slip != [])
+       |> assign(:dashboard_view, "games")
+       |> assign(:placed_bets, placed_bets)
+       |> assign(:selected_odds, %{})
+       |> assign(:current_user, current_user)
+       |> assign(:bet_stake, nil)
+       |> assign(:show_deposit_modal, false)
+       |> assign(:history, UserHistories.list_user_histories(current_user.id))
+       |> assign(:show_bet_modal, false)
+       |> assign(:selected_bet, nil)}
+    end
   end
 
   @impl true
@@ -242,16 +235,19 @@ defmodule BetZoneWeb.DashboardLive do
            socket
            |> assign(:placed_bets, placed_bets)
            |> assign(:history, history)
-           |> put_flash(:info, "Bet ##{bet_id} cancelled and refunded.")}
+           |> put_flash(:info, "Bet ##{bet_id} cancelled.")
+           |> assign(:show_bet_modal, false)}
         {:error, _} ->
           {:noreply,
            socket
-           |> put_flash(:error, "Failed to cancel bet.")}
+           |> put_flash(:error, "Failed to cancel bet.")
+           |> assign(:show_bet_modal, false)}
       end
     else
       {:noreply,
        socket
-       |> put_flash(:error, "Cannot cancel this bet.")}
+       |> put_flash(:error, "Cannot cancel this bet.")
+       |> assign(:show_bet_modal, false)}
     end
   end
 
@@ -356,9 +352,23 @@ defmodule BetZoneWeb.DashboardLive do
     {:noreply, assign(socket, show_bet_modal: true, selected_bet: bet)}
   end
 
-  def handle_event("hide_bet_modal", _params, socket) do
-    {:noreply, assign(socket, show_bet_modal: false, selected_bet: nil)}
+  def handle_event("show_bet_modal", %{"bet_id" => bet_id}, socket) do
+    bet_id = String.to_integer(bet_id)
+    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
+    {:noreply, assign(socket, show_bet_modal: true, selected_bet: bet)}
   end
+
+  @impl true
+def handle_event("cancel_bet", %{"bet_id" => bet_id}, socket) do
+  bet = Bets.get_bet!(bet_id)
+
+  # Add any checks here if needed, like only allowing canceling if status is "pending"
+  {:ok, _} = Bets.delete_bet(bet)
+
+  placed_bets = Bets.list_user_placed_bets(socket.assigns.current_user.id)
+
+  {:noreply, assign(socket, :placed_bets, placed_bets)}
+end
 
   @impl true
   def handle_event("submit_deposit", %{"amount" => amount}, socket) do
@@ -564,6 +574,55 @@ defmodule BetZoneWeb.DashboardLive do
     Phoenix.HTML.Form.form_tag("/bet_intent/store", method: :post, id: "bet-intent-form-#{game_id}-#{bet_type}", style: "display:none;") do
       Phoenix.HTML.Form.hidden_input(:bet_intent, :game_id, value: game_id) <>
       Phoenix.HTML.Form.hidden_input(:bet_intent, :bet_type, value: bet_type)
+    end
+  end
+
+  # Handle cancel_bet from modal component
+  @impl true
+  def handle_info({:cancel_bet, bet_id}, socket) do
+    IO.inspect({:cancel_bet_event, bet_id: bet_id, placed_bets: socket.assigns.placed_bets}, label: "[DEBUG] handle_info cancel_bet")
+    placed_bets = socket.assigns.placed_bets
+    bet = Enum.find(placed_bets, &(&1.id == bet_id))
+
+    if bet && bet.status == "pending" do
+      case Bets.cancel_bet(bet) do
+        {:ok, cancelled_bet} ->
+          IO.inspect({:cancelled_bet, cancelled_bet: cancelled_bet}, label: "[DEBUG] cancelled_bet")
+          UserHistories.create_user_history(%{
+            user_id: socket.assigns.current_user.id,
+            info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
+            type: "bet_cancelled",
+            ref_id: cancelled_bet.id
+          })
+
+          placed_bets =
+            if socket.assigns.current_user do
+              Bets.list_placed_bets(socket.assigns.current_user.id)
+              |> Bets.preload_selections()
+            else
+              []
+            end
+          history = UserHistories.list_user_histories(socket.assigns.current_user.id)
+
+          {:noreply,
+           socket
+           |> assign(:placed_bets, placed_bets)
+           |> assign(:history, history)
+           |> put_flash(:info, "Bet ##{bet_id} cancelled.")
+           |> assign(:show_bet_modal, false)}
+        {:error, reason} ->
+          IO.inspect({:cancel_bet_error, reason: reason}, label: "[DEBUG] cancel_bet_error")
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to cancel bet.")
+           |> assign(:show_bet_modal, false)}
+      end
+    else
+      IO.inspect({:cancel_bet_invalid, bet: bet}, label: "[DEBUG] cancel_bet_invalid")
+      {:noreply,
+       socket
+       |> put_flash(:error, "Cannot cancel this bet.")
+       |> assign(:show_bet_modal, false)}
     end
   end
 end

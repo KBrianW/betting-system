@@ -41,7 +41,6 @@ end
     live "/rugby", OtherSportsLive, :rugby
     live "/volleyball", OtherSportsLive, :volleyball
     live "/hockey", OtherSportsLive, :hockey
-    live "/history", HistoryLive, :index
   end
 
   # Super User Dashboard Scope
