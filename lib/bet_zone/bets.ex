@@ -20,6 +20,27 @@ defmodule BetZone.Bets do
     Repo.preload(placed_bet, [selections: [:game]])
   end
 
+  # Place a bet: move from draft to placed_bets with status "active"
+  def place_bet_from_draft(user_id) do
+    drafts = Repo.all(from d in "draft_bets", where: d.user_id == ^user_id and d.status == "pending")
+    if drafts == [] do
+      {:error, :no_draft}
+    else
+      attrs = %{
+        user_id: user_id,
+        total_odds: Enum.reduce(drafts, 1, fn d, acc -> acc * d.odds end),
+        stake_amount: Enum.at(drafts, 0).stake, # Assuming same stake for all
+        potential_win: Enum.reduce(drafts, 1, fn d, acc -> acc * d.odds end) * Enum.at(drafts, 0).stake,
+        status: "active"
+      }
+      bet_slip = Enum.map(drafts, fn d -> %{game_id: d.game_id, game_desc: d.game_desc, type: d.type, odds: d.odds} end)
+      result = create_placed_bet(attrs, bet_slip)
+      # Mark drafts as cleared
+      clear_draft_bets(user_id)
+      result
+    end
+  end
+
   def create_placed_bet(attrs, bet_slip) do
     Repo.transaction(fn ->
       # Create the placed bet
@@ -38,8 +59,6 @@ defmodule BetZone.Bets do
               result: "pending",
               inserted_at: Timex.now() |> DateTime.truncate(:second),
               updated_at: Timex.now() |> DateTime.truncate(:second)
-
-
             }
           end)
 

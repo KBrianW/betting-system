@@ -5,7 +5,7 @@ defmodule BetZone.Repo.Migrations.UpdateBetStatusesAndAddResult do
   def change do
     # Add the new result column (cancelled_at already exists, so do not add again)
     alter table(:placed_bets) do
-      add :result, :string
+      # add :result, :string # Already exists, do not add again
       # add :cancelled_at, :utc_datetime # Already exists, do not add again
     end
 
