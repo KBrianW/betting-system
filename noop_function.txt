@@ -1,0 +1,5 @@
+  # Handle noop event to prevent click propagation in bet slip
+  @impl true
+  def handle_event("noop", _params, socket) do
+    {:noreply, socket}
+  end

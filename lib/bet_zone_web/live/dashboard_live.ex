@@ -40,7 +40,7 @@ defmodule BetZoneWeb.DashboardLive do
       games = sort_games_by_time(games)
 
       # Load placed bets if user is logged in
-      placed_bets = Bets.evaluate_and_update_user_bets(current_user.id)
+      placed_bets = Bets.list_placed_bets(current_user.id) |> Bets.preload_selections()
 
       # Load draft bets if user is logged in
       bet_slip =
@@ -72,7 +72,7 @@ defmodule BetZoneWeb.DashboardLive do
        |> assign(:placed_bets, placed_bets)
        |> assign(:selected_odds, %{})
        |> assign(:current_user, current_user)
-       |> assign(:bet_stake, nil)
+       |> assign(:bet_stake, 50)
        |> assign(:show_deposit_modal, false)
        |> assign(:history, UserHistories.list_user_histories(current_user.id))
        |> assign(:show_bet_modal, false)
@@ -161,7 +161,7 @@ defmodule BetZoneWeb.DashboardLive do
           game_desc: "#{game.team_a} vs #{game.team_b}",
           type: String.capitalize(bet_type),
           odds: odds,
-          stake: socket.assigns[:bet_stake] || 1
+          stake: socket.assigns[:bet_stake] || 50
         }
         bet_slip = socket.assigns.bet_slip || []
         # Remove any existing bet for this game
@@ -214,65 +214,98 @@ defmodule BetZoneWeb.DashboardLive do
   end
 
   @impl true
-def handle_event("hide_cancel_confirm", _, socket) do
-  {:noreply, assign(socket,
-    show_cancel_confirm: false,
-    bet_to_cancel: nil
-  )}
-end
-
-@impl true
-def handle_event("confirm_cancel_bet", %{"bet_id" => bet_id}, socket) do
-  socket = assign(socket, show_cancel_confirm: false)
-  handle_event("cancel_bet", %{"bet_id" => bet_id}, socket)
-end
-
-@impl true
-def handle_event("cancel_bet", %{"bet_id" => bet_id}, socket) do
-  bet_id = String.to_integer(bet_id)
-  bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
-
-  if bet && bet.status == "pending" do
-    case Bets.cancel_bet(bet) do
-      {:ok, cancelled_bet} ->
-        # Optimized update without full reload
-        updated_bets = Enum.map(socket.assigns.placed_bets, fn b ->
-          if b.id == bet_id, do: cancelled_bet, else: b
-        end)
-
-        UserHistories.create_user_history(%{
-          user_id: socket.assigns.current_user.id,
-          info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
-          type: "bet_cancelled",
-          ref_id: cancelled_bet.id
-        })
-
-        {:noreply,
-         socket
-         |> assign(:placed_bets, updated_bets)
-         |> put_flash(:info, "Bet ##{bet_id} cancelled.")}
-
-      {:error, _reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Failed to cancel bet.")}
-    end
-  else
-    {:noreply,
-     socket
-     |> put_flash(:error, "Cannot cancel this bet - it may have already been processed.")}
+  def handle_event("hide_cancel_confirm", _, socket) do
+    {:noreply, assign(socket,
+      show_cancel_confirm: false,
+      bet_to_cancel: nil
+    )}
   end
-end
+
+  @impl true
+  def handle_event("confirm_cancel_bet", %{"bet_id" => bet_id}, socket) do
+    socket = assign(socket, show_cancel_confirm: false)
+    handle_event("cancel_bet", %{"bet_id" => bet_id}, socket)
+  end
+
+  @impl true
+  def handle_event("cancel_bet", %{"bet_id" => bet_id}, socket) do
+    bet_id = String.to_integer(bet_id)
+    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
+
+    if bet && bet.status in ["pending", "active"] do
+      case Bets.cancel_bet(bet) do
+        {:ok, cancelled_bet} ->
+          # Reload user to get updated wallet balance
+          current_user = BetZone.Accounts.get_user!(socket.assigns.current_user.id)
+          
+          # Reload placed bets
+          placed_bets = Bets.list_placed_bets(current_user.id) |> Bets.preload_selections()
+
+          UserHistories.create_user_history(%{
+            user_id: current_user.id,
+            info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
+            type: "bet_cancelled",
+            ref_id: cancelled_bet.id
+          })
+
+          {:noreply,
+           socket
+           |> assign(:current_user, current_user)
+           |> assign(:placed_bets, placed_bets)
+           |> put_flash(:info, "Bet ##{bet_id} cancelled and refunded.")}
+
+        {:error, _reason} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Failed to cancel bet.")}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Cannot cancel this bet - it may have already been processed.")}
+    end
+  end
 
   @impl true
   def handle_event("save_and_close_bet_slip", _params, socket) do
-    if socket.assigns.current_user do
-      Bets.save_bet_slip(socket.assigns.current_user.id, socket.assigns.bet_slip)
-    end
+    if socket.assigns.current_user && socket.assigns.bet_slip && Enum.any?(socket.assigns.bet_slip) do
+      # Save bet slip as pending bet in placed_bets table
+      user = socket.assigns.current_user
+      bet_slip = socket.assigns.bet_slip
+      total_stake = (socket.assigns.bet_stake || 50) * length(bet_slip)
+      total_odds = Enum.reduce(bet_slip, 1, fn bet, acc -> acc * bet.odds end)
+      potential_win = total_odds * (socket.assigns.bet_stake || 50)
 
-    {:noreply,
-     socket
-     |> assign(:bet_slip_open, false)}
+      placed_bet_attrs = %{
+        user_id: user.id,
+        total_odds: total_odds,
+        stake_amount: total_stake,
+        potential_win: potential_win,
+        status: "pending"
+      }
+
+      case Bets.create_placed_bet(placed_bet_attrs, bet_slip) do
+        {:ok, _placed_bet} ->
+          # Clear the bet slip and reload placed bets
+          placed_bets = Bets.list_placed_bets(user.id) |> Bets.preload_selections()
+          {:noreply,
+           socket
+           |> assign(:bet_slip, [])
+           |> assign(:selected_odds, %{})
+           |> assign(:bet_slip_open, false)
+           |> assign(:placed_bets, placed_bets)
+           |> put_flash(:info, "Bet saved as pending.")}
+        {:error, _changeset} ->
+          {:noreply,
+           socket
+           |> assign(:bet_slip_open, false)
+           |> put_flash(:error, "Failed to save bet.")}
+      end
+    else
+      {:noreply,
+       socket
+       |> assign(:bet_slip_open, false)}
+    end
   end
 
   @impl true
@@ -296,15 +329,6 @@ end
     bet_slip = Enum.reject(socket.assigns.bet_slip, &(&1.game_id == game_id and &1.type == bet_type_cap))
     selected_odds = Map.delete(socket.assigns.selected_odds, {game_id, bet_type_cap})
 
-    # Save the updated bet slip only if not empty, otherwise delete all drafts
-    if socket.assigns.current_user do
-      if Enum.any?(bet_slip) do
-        Bets.save_bet_slip(socket.assigns.current_user.id, bet_slip)
-      else
-        Bets.delete_all_draft_bets(socket.assigns.current_user.id)
-      end
-    end
-
     {:noreply,
      socket
      |> assign(:bet_slip, bet_slip)
@@ -313,33 +337,17 @@ end
   end
 
   @impl true
-  def handle_event("update_all_stakes", %{"stake" => stake}, socket) do
-    {stake, _} = Integer.parse(stake)
-    bet_slip = Enum.map(socket.assigns.bet_slip, fn bet -> Map.put(bet, :stake, stake) end)
-
-    # Save the updated bet slip
-    if socket.assigns.current_user do
-      Bets.save_bet_slip(socket.assigns.current_user.id, bet_slip)
-    end
-
-    {:noreply,
-     socket
-     |> assign(:bet_slip, bet_slip)
-     |> assign(:bet_stake, stake)}
-  end
-
-  @impl true
   def handle_event("update_stake", %{"stake" => stake}, socket) do
     stake =
       case Integer.parse(stake) do
-        {val, _} when val > 0 -> val
-        _ -> nil
+        {val, _} when val >= 50 -> val
+        _ -> 50
       end
     bet_slip = Enum.map(socket.assigns.bet_slip,
       fn bet -> Map.put(bet, :stake, stake) end
     )
     {:noreply, assign(socket, bet_stake: stake, bet_slip: bet_slip)}
-    end
+  end
 
   @impl true
   def handle_event("redirect_to_login", _params, socket) do
@@ -359,29 +367,56 @@ end
     {:noreply, assign(socket, show_deposit_modal: false)}
   end
 
-  def handle_event("show_bet_modal", %{"bet_id" => bet_id}, socket) do
-    bet_id = String.to_integer(bet_id)
-    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
-    {:noreply, assign(socket, show_bet_modal: true, selected_bet: bet)}
-  end
-
-  def handle_event("show_bet_modal", %{"bet_id" => bet_id}, socket) do
-    bet_id = String.to_integer(bet_id)
-    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
-    {:noreply, assign(socket, show_bet_modal: true, selected_bet: bet)}
+  # Handle noop event to prevent click propagation in bet slip
+  @impl true
+  def handle_event("noop", _params, socket) do
+    {:noreply, socket}
   end
 
   @impl true
-def handle_event("cancel_bet", %{"bet_id" => bet_id}, socket) do
-  bet = Bets.get_bet!(bet_id)
+  def handle_event("load_pending_bet", %{"bet_id" => bet_id}, socket) do
+    bet_id = String.to_integer(bet_id)
+    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
+    
+    if bet && bet.status == "pending" do
+      # Convert placed bet back to bet slip format
+      bet_slip = Enum.map(bet.bet_selections, fn selection ->
+        %{
+          game_id: selection.game_id,
+          game_desc: selection.game_desc,
+          type: selection.bet_type,
+          odds: selection.odds,
+          stake: div(bet.stake_amount, length(bet.bet_selections))
+        }
+      end)
+      
+      # Delete the pending bet since we're editing it
+      Bets.delete_bet(bet)
+      
+      # Reload placed bets
+      placed_bets = Bets.list_placed_bets(socket.assigns.current_user.id) |> Bets.preload_selections()
+      
+      # Load into bet slip
+      {:noreply,
+       socket
+       |> assign(:bet_slip, bet_slip)
+       |> assign(:bet_slip_open, true)
+       |> assign(:placed_bets, placed_bets)
+       |> assign(:bet_stake, div(bet.stake_amount, length(bet.bet_selections)))
+       |> assign(:dashboard_view, "games")}
+    else
+      {:noreply, socket}
+    end
+  end
 
-  # Add any checks here if needed, like only allowing canceling if status is "pending"
-  {:ok, _} = Bets.delete_bet(bet)
-
-  placed_bets = Bets.list_user_placed_bets(socket.assigns.current_user.id)
-
-  {:noreply, assign(socket, :placed_bets, placed_bets)}
-end
+  @impl true
+  def handle_event("show_bet_modal", %{"bet_id" => bet_id}, socket) do
+    bet_id = String.to_integer(bet_id)
+    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
+    # Force close first, then open to reset modal state
+    socket = assign(socket, show_bet_modal: false)
+    {:noreply, assign(socket, show_bet_modal: true, selected_bet: bet)}
+  end
 
   @impl true
   def handle_event("submit_deposit", %{"amount" => amount}, socket) do
@@ -427,7 +462,7 @@ end
         total_odds: total_odds,
         stake_amount: total_stake,
         potential_win: potential_win,
-        status: "pending"
+        status: "active"
       }
 
       case Bets.create_placed_bet(placed_bet_attrs, bet_slip) do
@@ -435,14 +470,19 @@ end
           # Create transaction for the bet placement
           {:ok, _transaction} = Transactions.create_bet_transaction(user, placed_bet, "bet_place")
 
-          # Clear the bet slip
-          Bets.delete_all_draft_bets(user.id)
+          # Reload user to get updated wallet balance
+          current_user = BetZone.Accounts.get_user!(user.id)
+          
+          # Reload placed bets
+          placed_bets = Bets.list_placed_bets(user.id) |> Bets.preload_selections()
 
           {:noreply,
            socket
            |> assign(:bet_slip, [])
            |> assign(:selected_odds, %{})
            |> assign(:bet_slip_open, false)
+           |> assign(:current_user, current_user)
+           |> assign(:placed_bets, placed_bets)
            |> put_flash(:info, "Bets placed successfully!")}
 
         {:error, _changeset} ->
@@ -587,55 +627,6 @@ end
     Phoenix.HTML.Form.form_tag("/bet_intent/store", method: :post, id: "bet-intent-form-#{game_id}-#{bet_type}", style: "display:none;") do
       Phoenix.HTML.Form.hidden_input(:bet_intent, :game_id, value: game_id) <>
       Phoenix.HTML.Form.hidden_input(:bet_intent, :bet_type, value: bet_type)
-    end
-  end
-
-  # Handle cancel_bet from modal component
-  @impl true
-  def handle_info({:cancel_bet, bet_id}, socket) do
-    IO.inspect({:cancel_bet_event, bet_id: bet_id, placed_bets: socket.assigns.placed_bets}, label: "[DEBUG] handle_info cancel_bet")
-    placed_bets = socket.assigns.placed_bets
-    bet = Enum.find(placed_bets, &(&1.id == bet_id))
-
-    if bet && bet.status == "pending" do
-      case Bets.cancel_bet(bet) do
-        {:ok, cancelled_bet} ->
-          IO.inspect({:cancelled_bet, cancelled_bet: cancelled_bet}, label: "[DEBUG] cancelled_bet")
-          UserHistories.create_user_history(%{
-            user_id: socket.assigns.current_user.id,
-            info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
-            type: "bet_cancelled",
-            ref_id: cancelled_bet.id
-          })
-
-          placed_bets =
-            if socket.assigns.current_user do
-              Bets.list_placed_bets(socket.assigns.current_user.id)
-              |> Bets.preload_selections()
-            else
-              []
-            end
-          history = UserHistories.list_user_histories(socket.assigns.current_user.id)
-
-          {:noreply,
-           socket
-           |> assign(:placed_bets, placed_bets)
-           |> assign(:history, history)
-           |> put_flash(:info, "Bet ##{bet_id} cancelled.")
-           |> assign(:show_bet_modal, false)}
-        {:error, reason} ->
-          IO.inspect({:cancel_bet_error, reason: reason}, label: "[DEBUG] cancel_bet_error")
-          {:noreply,
-           socket
-           |> put_flash(:error, "Failed to cancel bet.")
-           |> assign(:show_bet_modal, false)}
-      end
-    else
-      IO.inspect({:cancel_bet_invalid, bet: bet}, label: "[DEBUG] cancel_bet_invalid")
-      {:noreply,
-       socket
-       |> put_flash(:error, "Cannot cancel this bet.")
-       |> assign(:show_bet_modal, false)}
     end
   end
 end

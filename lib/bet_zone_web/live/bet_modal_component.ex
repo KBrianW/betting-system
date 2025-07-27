@@ -28,17 +28,15 @@ defmodule BetZoneWeb.BetModalComponent do
               Potential Win: KSH <%= Decimal.round(@bet.potential_win, 2) %> |
               Status: <%= String.capitalize(@bet.status) %>
             </div>
-            <%= if @bet.status in ["pending"] do %>
-  <div class="flex justify-end mt-4">
-    <button
-      phx-click="cancel_bet"
-      phx-target={@myself}
-      class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition duration-200 text-sm"
-    >
-      Cancel Bet
-    </button>
-  </div>
-<% end %>
+            <div class="flex justify-end mt-4">
+              <button
+                phx-click="show_bets"
+                phx-target={@myself}
+                class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition duration-200 text-sm"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

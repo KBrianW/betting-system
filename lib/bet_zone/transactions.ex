@@ -76,7 +76,7 @@ defmodule BetZone.Transactions do
 
   def create_withdrawal(user, amount) do
     Repo.transaction(fn ->
-      current_balance = get_user_balance(user.id)
+      current_balance = user.wallet || Decimal.new(0)
 
       if Decimal.compare(current_balance, amount) == :lt do
         {:error, "Insufficient balance"}
@@ -153,7 +153,7 @@ defmodule BetZone.Transactions do
   end
 
   defp update_user_wallet(user, amount) do
-    current_balance = get_user_balance(user.id)
+    current_balance = user.wallet || Decimal.new(0)
     new_balance = Decimal.add(current_balance, amount)
     IO.inspect({:wallet_update, user_id: user.id, current_balance: current_balance, amount: amount, new_balance: new_balance})
 

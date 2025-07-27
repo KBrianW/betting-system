@@ -22,6 +22,28 @@ defmodule BetZone.Accounts do
 
   def get_user!(id), do: Repo.get!(User, id)
 
+  # Admin functions for user management
+  def list_users do
+    Repo.all(User)
+  end
+
+  def list_users_by_role(role) do
+    from(u in User, where: u.role == ^role)
+    |> Repo.all()
+  end
+
+  def update_user_role(user, new_role) do
+    user
+    |> Ecto.Changeset.change(role: new_role)
+    |> Repo.update()
+  end
+
+  def update_user_status(user, new_status) do
+    user
+    |> Ecto.Changeset.change(status: new_status)
+    |> Repo.update()
+  end
+
   # User registration
   def register_user(attrs) do
     %User{}

@@ -138,5 +138,12 @@ defmodule BetZoneWeb.UserAuth do
 
   defp maybe_store_return_to(conn), do: conn
 
-  defp signed_in_path(_conn), do: ~p"/"
+  defp signed_in_path(conn) do
+    case conn.assigns[:current_user] do
+      %{role: :frontend} -> ~p"/dashboard"
+      %{role: :admin} -> ~p"/super_panel"
+      %{role: :super_user} -> ~p"/super_panel"
+      _ -> ~p"/"
+    end
+  end
 end

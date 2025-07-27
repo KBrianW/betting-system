@@ -7,7 +7,10 @@
           <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clip-rule="evenodd" />
         </svg>
-        <.live_component module={BetZoneWeb.WalletBalanceComponent} id={"wallet-balance-#{@current_user.id}"} user_id={@current_user.id} />
+        <div class="flex items-center">
+          <span class="text-sm font-medium text-gray-700 mr-2">Wallet:</span>
+          <span class="text-lg font-bold text-green-600">KSH <%= @current_user.wallet %></span>
+        </div>
         <button phx-click="show_deposit_modal" class="ml-2 bg-black text-white px-4 py-2 rounded font-semibold transition hover:bg-brand">Deposit</button>
       </div>
     <% end %>
@@ -130,11 +133,11 @@
       </svg>
       Back to Games
     </button>
-    <h3 class="text-xl font-bold mb-4 text-gray-700">Bets Placed</h3>
+    <h3 class="text-xl font-bold mb-4 text-gray-700">My Bets</h3>
     <div class="bg-white rounded shadow divide-y divide-gray-200">
       <%= for bet <- @placed_bets, bet.status in ["pending", "active"] do %>
         <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
-          <div class="flex flex-col flex-1 cursor-pointer" phx-click="show_bet_modal" phx-value-bet_id={bet.id}>
+          <div class="flex flex-col flex-1 cursor-pointer" phx-click={if bet.status == "pending", do: "load_pending_bet", else: "show_bet_modal"} phx-value-bet_id={bet.id}>
             <div class="text-gray-800 font-semibold">Bet ID: <%= bet.id %></div>
             <div class="text-xs text-gray-400 mb-1"><%= Calendar.strftime(bet.inserted_at, "%a, %d %b %Y %H:%M") %></div>
             <div class="text-sm text-gray-600">Stake: KSH <%= bet.stake_amount %> | Odds: <%= bet.total_odds %> | Potential Win: KSH <%= bet.potential_win %></div>
@@ -147,9 +150,12 @@
                   _ -> ""
                 end
               }><%= String.capitalize(bet.status) %></span>
+              <%= if bet.status == "pending" do %>
+                <span class="text-xs text-gray-500 ml-2">(Click to edit)</span>
+              <% end %>
             </div>
           </div>
-          <%= if bet.status == "pending" do %>
+          <%= if bet.status in ["pending", "active"] do %>
             <button phx-click="request_cancel_bet" phx-value-bet_id={bet.id} class="ml-4 text-red-500 hover:text-red-700 text-sm font-medium">Cancel</button>
           <% end %>
         </div>
@@ -224,57 +230,56 @@
   </div>
 <% end %>
 
-<!-- Bet Slip Sidebar -->  <!-- This is your existing code -->
-<%= if @current_user && @bet_slip && Enum.any?(@bet_slip) do %>
-  [... existing bet slip code ...]
-<% end %>
-
 <!-- Bet Slip Sidebar -->
 <%= if @current_user && @bet_slip && Enum.any?(@bet_slip) do %>
   <div id="bet-slip-overlay" phx-click="toggle_bet_slip" class={"fixed inset-0 bg-black bg-opacity-30 transition-opacity #{if @bet_slip_open, do: "opacity-100", else: "opacity-0 pointer-events-none"}"}>
   </div>
   <div id="bet-slip" phx-click-away="save_and_close_bet_slip" class={"fixed top-0 right-0 h-full w-80 bg-white shadow-lg z-50 transform transition-transform duration-300 ease-in-out #{if @bet_slip_open, do: "translate-x-0", else: "translate-x-full"}"}>
-    <div class="flex items-center justify-between p-4 border-b border-gray-200">
-      <h3 class="text-lg font-bold text-gray-800">Bet Slip</h3>
-      <button phx-click="clear_bet_slip" class="text-gray-500 hover:text-gray-700 px-2 py-1">Cancel All</button>
-    </div>
-    <div class="p-4">
-      <ul class="space-y-4">
-        <%= for bet <- @bet_slip do %>
-          <li class="flex flex-col gap-2 pb-4 border-b border-gray-100">
-            <div class="flex justify-between items-start">
-              <span class="text-gray-700"><%= bet.game_desc %> (<%= bet.type %>)</span>
-              <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="text-gray-500 hover:text-red-500">Cancel</button>
+    <div phx-click="noop">
+      <div class="flex items-center justify-between p-4 border-b border-gray-200">
+        <h3 class="text-lg font-bold text-gray-800">Bet Slip</h3>
+        <button phx-click="clear_bet_slip" class="text-gray-500 hover:text-gray-700 px-2 py-1">Cancel All</button>
+      </div>
+      <div class="p-4">
+        <ul class="space-y-4">
+          <%= for bet <- @bet_slip do %>
+            <li class="flex flex-col gap-2 pb-4 border-b border-gray-100">
+              <div class="flex justify-between items-start">
+                <span class="text-gray-700"><%= bet.game_desc %> (<%= bet.type %>)</span>
+                <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="text-gray-500 hover:text-red-500">Cancel</button>
+              </div>
+              <span class="font-semibold text-gray-800">@ <%= bet.odds %></span>
+            </li>
+          <% end %>
+        </ul>
+        <div class="mt-6 space-y-4">
+          <form phx-change="update_stake" phx-debounce="500">
+            <div class="flex justify-between items-center">
+              <label class="text-gray-700 font-medium">Stake Amount:</label>
+              <input type="number" 
+                     min="50" 
+                     step="50"
+                     value={@bet_stake || 50}
+                     name="stake"
+                     autocomplete="off"
+                     class="w-24 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
+              />
             </div>
-            <span class="font-semibold text-gray-800">@ <%= bet.odds %></span>
-          </li>
-        <% end %>
-      </ul>
-      <div class="mt-6 space-y-4">
-        <form debouce="300" phx-change="update_stake">
-          <div class="flex justify-between items-center">
-            <label class="text-gray-700 font-medium">Stake Amount:</label>
-            <input type="text"
-                   value={@bet_stake}
-                   name="stake"
-                   autocomplete="off"
-                   class="w-24 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
-            />
+          </form>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-gray-600">Total Odds:</span>
+            <span class="font-semibold">
+              <%= Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) |> Float.round(2) %>
+            </span>
           </div>
-        </form>
-        <div class="flex justify-between items-center text-sm">
-          <span class="text-gray-600">Total Odds:</span>
-          <span class="font-semibold">
-            <%= Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) |> Float.round(2) %>
-          </span>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-gray-600">Potential Win:</span>
+            <span class="font-semibold text-green-600">
+              KSH <%= (Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) * (@bet_stake || 50)) |> Float.round(2) %>
+            </span>
+          </div>
+          <button phx-click="place_bets" class="w-full bg-gray-800 text-white px-4 py-2 rounded font-semibold hover:bg-gray-700 transition">Place Bets</button>
         </div>
-        <div class="flex justify-between items-center text-sm">
-          <span class="text-gray-600">Potential Win:</span>
-          <span class="font-semibold text-green-600">
-            KSH <%= (Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) * (@bet_stake || 0)) |> Float.round(2) %>
-          </span>
-        </div>
-        <button phx-click="place_bets" class="w-full bg-gray-800 text-white px-4 py-2 rounded font-semibold hover:bg-gray-700 transition">Place Bets</button>
       </div>
     </div>
   </div>

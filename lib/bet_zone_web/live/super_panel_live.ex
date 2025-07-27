@@ -1,71 +1,12 @@
 defmodule BetZoneWeb.SuperPanelLive do
   use BetZoneWeb, :live_view
 
+  alias BetZone.Accounts
   alias BetZone.Teams
   alias BetZone.Games
-  alias Timex.Timex
-
-  @weeks 8
-  @games_per_week 8
-  @season_start ~D[2024-06-24] 
 
   @impl true
   def mount(_params, session, socket) do
-    teams = Teams.list_teams()
-    now = DateTime.utc_now()
-    current_week = week_number(now, @season_start)
-    cycle = div(current_week - 1, @weeks) + 1
-    week = rem(current_week - 1, @weeks) + 1
-
-    if Games.list_games_by_cycle(cycle) == [] do
-      generate_and_insert_games(teams, @weeks, @games_per_week, @season_start |> DateTime.new!(~T[00:00:00], "Etc/UTC"), cycle)
-    end
-
-    games = Games.list_games_by_week_and_cycle(week, cycle)
-    games = decorate_games(games, now)
-    games = sort_games_by_time(games)
-
-    # Sample/mock data for history and bets
-    history = [
-      %{time: NaiveDateTime.utc_now(), info: "You gained $50 from winning a bet."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -2 * 60 * 60), info: "Game between Team A and Team B was postponed."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -1 * 24 * 60 * 60), info: "Insufficient funds for bet on Team C vs Team D."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -2 * 24 * 60 * 60), info: "You lost $20 on Team E vs Team F."},
-      %{time: NaiveDateTime.add(NaiveDateTime.utc_now(), -3 * 24 * 60 * 60), info: "Game between Team G and Team H was cancelled."}
-    ]
-    bets = [
-      %{id: 1, time: NaiveDateTime.add(NaiveDateTime.utc_now(), -1 * 60 * 60), desc: "Team A vs Team B (Win)", odds: 2.1, amount: 20, status: :pending, games_status: [:upcoming]},
-      %{id: 2, time: NaiveDateTime.add(NaiveDateTime.utc_now(), -1 * 24 * 60 * 60), desc: "Team C vs Team D (Draw)", odds: 3.2, amount: 15, status: :pending, games_status: [:ongoing]},
-      %{id: 3, time: NaiveDateTime.add(NaiveDateTime.utc_now(), -2 * 24 * 60 * 60), desc: "Team E vs Team F (Loss)", odds: 1.8, amount: 10, status: :lost, games_status: [:completed]}
-    ]
-
-    {bet_slip, selected_odds} =
-      case session["intended_bet"] do
-        nil -> {[], %{}}
-        intended ->
-          game = Enum.find(games, &("#{&1.id}" == intended["game_id"]))
-          if game do
-            bet_type = String.capitalize(intended["bet_type"])
-            odds = case intended["bet_type"] do
-              "win" -> game.odds.win
-              "draw" -> game.odds.draw
-              "loss" -> game.odds.loss
-              _ -> game.odds.win
-            end
-            bet = %{
-              game_id: game.id,
-              game_desc: "#{game.team_a} vs #{game.team_b}",
-              type: bet_type,
-              odds: odds,
-              stake: 1
-            }
-            {[bet], Map.put(%{}, {game.id, bet_type}, true)}
-          else
-            {[], %{}}
-          end
-      end
-
-    # Assign current_user if present in session
     current_user =
       if user_token = session["user_token"] do
         BetZone.Accounts.get_user_by_session_token(user_token)
@@ -73,147 +14,170 @@ defmodule BetZoneWeb.SuperPanelLive do
         nil
       end
 
-    {:ok,
+    # Check if user has admin or super_admin role
+    if is_nil(current_user) or current_user.role not in [:admin, :super_user] do
+      {:ok, Phoenix.LiveView.redirect(socket, to: "/users/log_in")}
+    else
+      # Load initial data
+      users = load_users_by_role(current_user.role)
+      sports = ["football", "basketball", "tennis", "rugby", "volleyball", "hockey"]
+
+      {:ok,
+       socket
+       |> assign(:current_user, current_user)
+       |> assign(:active_page, "dashboard")
+       |> assign(:active_tab, "active")
+       |> assign(:users, users)
+       |> assign(:sports, sports)
+       |> assign(:selected_sport, nil)
+       |> assign(:show_sport_dropdown, false)}
+    end
+  end
+
+  @impl true
+  def handle_event("navigate_to", %{"page" => page}, socket) do
+    users = if page == "users", do: load_users_by_role(socket.assigns.current_user.role), else: socket.assigns.users
+    
+    {:noreply,
      socket
-     |> assign(:sport, "football")
-     |> assign(:week, week)
-     |> assign(:tab, "upcoming")
-     |> assign(:games, games)
-     |> assign(:filtered_games, filter_and_sort_games(games, "upcoming"))
-     |> assign(:now, now)
-     |> assign(:cycle, cycle)
-     |> assign(:teams, teams)
-     |> assign(:season_start, @season_start)
-     |> assign(:bet_slip, bet_slip)
-     |> assign(:bet_slip_open, bet_slip != [])
-     |> assign(:dashboard_view, "games")
-     |> assign(:history, history)
-     |> assign(:bets, bets)
-     |> assign(:selected_odds, selected_odds)
-     |> assign(:current_user, current_user)
-     |> assign(:active_page, "football")
-    }
+     |> assign(:active_page, page)
+     |> assign(:active_tab, "active")
+     |> assign(:users, users)}
   end
 
-  defp week_number(now, season_start) do
-    days = Date.diff(DateTime.to_date(now), season_start)
-    div(days, 7) + 1
+  @impl true
+  def handle_event("change_user_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, :active_tab, tab)}
   end
 
-  defp sort_games_by_time(games) do
-    Enum.sort_by(games, & &1.scheduled_time, {:asc, DateTime})
+  @impl true
+  def handle_event("toggle_sport_dropdown", _params, socket) do
+    {:noreply, assign(socket, :show_sport_dropdown, !socket.assigns.show_sport_dropdown)}
   end
 
-  defp filter_and_sort_games(games, tab) do
-    filtered =
-      case tab do
-        "games" -> games # No filtering, show all games
-        "ongoing" -> Enum.filter(games, &(&1.status == :ongoing))
-        "completed" -> Enum.filter(games, &(&1.status == :completed))
-        _ -> games
+  @impl true
+  def handle_event("select_sport", %{"sport" => sport}, socket) do
+    {:noreply,
+     socket
+     |> assign(:selected_sport, sport)
+     |> assign(:show_sport_dropdown, false)}
+  end
+
+  @impl true
+  def handle_event("promote_to_admin", %{"user_id" => user_id}, socket) do
+    if socket.assigns.current_user.role == :super_user do
+      user = Accounts.get_user!(user_id)
+      case Accounts.update_user_role(user, :admin) do
+        {:ok, _updated_user} ->
+          users = load_users_by_role(socket.assigns.current_user.role)
+          {:noreply,
+           socket
+           |> assign(:users, users)
+           |> put_flash(:info, "User promoted to admin successfully.")}
+        {:error, _changeset} ->
+          {:noreply, put_flash(socket, :error, "Failed to promote user.")}
       end
-    sort_games_by_time(filtered)
-  end
-
-  defp generate_and_insert_games(teams, weeks, games_per_week, season_start_dt, cycle) do
-    team_ids = Enum.map(teams, & &1.id)
-    Enum.each(1..weeks, fn week ->
-      week_start = DateTime.add(season_start_dt, ((cycle - 1) * weeks + (week - 1)) * 7 * 24 * 60 * 60, :second)
-      pairs = random_unique_pairs(team_ids, games_per_week)
-      Enum.with_index(pairs, 1)
-      |> Enum.each(fn {{team_a_id, team_b_id}, _id} ->
-        day_offset = :rand.uniform(7) - 1
-        hour = Enum.random(8..23)
-        minute = Enum.random([0, 15, 30, 45])
-        scheduled_time =
-          week_start
-          |> DateTime.add(day_offset * 24 * 60 * 60, :second)
-          |> DateTime.add(hour * 60 * 60 + minute * 60, :second)
-        odds = random_odds()
-        Games.create_game(%{
-          team_a_id: team_a_id,
-          team_b_id: team_b_id,
-          scheduled_time: scheduled_time,
-          odds_win: odds.win,
-          odds_draw: odds.draw,
-          odds_loss: odds.loss,
-          status: "upcoming",
-          score_a: nil,
-          score_b: nil,
-          week: week,
-          cycle: cycle
-        })
-      end)
-    end)
-  end
-
-  defp decorate_games(games, now) do
-    team_map =
-      BetZone.Teams.list_teams()
-      |> Enum.reduce(%{}, fn team, acc -> Map.put(acc, team.id, team.name) end)
-
-    Enum.map(games, fn game ->
-      status = game_status(game.scheduled_time, now)
-      odds = %{win: game.odds_win, draw: game.odds_draw, loss: game.odds_loss}
-      {score, elapsed} =
-        cond do
-          status == :ongoing ->
-            {a, b, elapsed} = live_score(game, now)
-            {{a, b}, elapsed}
-          status == :completed and (is_nil(game.score_a) or is_nil(game.score_b)) ->
-            a = Enum.random(0..5)
-            b = Enum.random(0..5)
-            BetZone.Games.update_game(game, %{score_a: a, score_b: b})
-            {{a, b}, 10}
-          true ->
-            {{game.score_a, game.score_b}, 10}
-        end
-      team_a = Map.get(team_map, game.team_a_id, "?")
-      team_b = Map.get(team_map, game.team_b_id, "?")
-      Map.merge(game, %{status: status, odds: odds, score: score, team_a: team_a, team_b: team_b, elapsed: elapsed})
-    end)
-  end
-
-  defp random_unique_pairs(list, count) do
-    all_pairs =
-      for a <- list, b <- list, a != b, do: {a, b}
-    all_pairs
-    |> Enum.uniq_by(fn {a, b} -> Enum.sort([a, b]) end)
-    |> Enum.shuffle()
-    |> Enum.take(count)
-  end
-
-  defp random_odds do
-    %{
-      win: Float.round(:rand.uniform() * 2 + 1, 2),
-      draw: Float.round(:rand.uniform() * 2 + 1, 2),
-      loss: Float.round(:rand.uniform() * 2 + 1, 2)
-    }
-  end
-
-  defp game_status(scheduled_time, now) do
-    cond do
-      DateTime.compare(scheduled_time, now) == :gt -> :upcoming
-      DateTime.diff(now, scheduled_time) < 10 * 60 -> :ongoing # 10 minutes for a match
-      true -> :completed
+    else
+      {:noreply, put_flash(socket, :error, "Unauthorized action.")}
     end
   end
 
-  defp filter_games_by_tab(games, tab) do
+  @impl true
+  def handle_event("activate_user", %{"user_id" => user_id}, socket) do
+    user = Accounts.get_user!(user_id)
+    case Accounts.update_user_status(user, :active) do
+      {:ok, _updated_user} ->
+        users = load_users_by_role(socket.assigns.current_user.role)
+        {:noreply,
+         socket
+         |> assign(:users, users)
+         |> put_flash(:info, "User activated successfully.")}
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to activate user.")}
+    end
+  end
+
+  @impl true
+  def handle_event("deactivate_user", %{"user_id" => user_id}, socket) do
+    user = Accounts.get_user!(user_id)
+    case Accounts.update_user_status(user, :inactive) do
+      {:ok, _updated_user} ->
+        users = load_users_by_role(socket.assigns.current_user.role)
+        {:noreply,
+         socket
+         |> assign(:users, users)
+         |> put_flash(:info, "User deactivated successfully.")}
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to deactivate user.")}
+    end
+  end
+
+  # Helper functions
+  defp load_users_by_role(role) do
+    case role do
+      :super_user ->
+        # Super admin can see all users including admins
+        Accounts.list_users()
+      :admin ->
+        # Admin can only see frontend users
+        Accounts.list_users_by_role(:frontend)
+    end
+  end
+
+  defp filter_users_by_status(users, status) do
+    Enum.filter(users, &(&1.status == status))
+  end
+
+  defp filter_users_by_role(users, role) do
+    Enum.filter(users, &(&1.role == role))
+  end
+
+  defp get_user_tabs(current_user_role) do
+    base_tabs = [
+      %{key: "active", label: "Active", icon: "check-circle"},
+      %{key: "inactive", label: "Inactive", icon: "x-circle"},
+      %{key: "pending", label: "Pending", icon: "clock"}
+    ]
+
+    if current_user_role == :super_user do
+      base_tabs ++ [%{key: "admins", label: "Admins", icon: "shield-check"}]
+    else
+      base_tabs
+    end
+  end
+
+  defp get_filtered_users(users, tab, current_user_role) do
     case tab do
-      "upcoming" -> Enum.filter(games, &(&1.status == :upcoming))
-      "ongoing" -> Enum.filter(games, &(&1.status == :ongoing))
-      "completed" -> Enum.filter(games, &(&1.status == :completed))
-      _ -> games
+      "active" -> filter_users_by_status(users, :active) |> filter_non_admins_if_admin(current_user_role)
+      "inactive" -> filter_users_by_status(users, :inactive) |> filter_non_admins_if_admin(current_user_role)
+      "pending" -> filter_users_by_status(users, :pending) |> filter_non_admins_if_admin(current_user_role)
+      "admins" -> if current_user_role == :super_user, do: filter_users_by_role(users, :admin), else: []
     end
   end
 
-  defp live_score(game, now) do
-    elapsed = max(0, min(10, div(DateTime.diff(now, game.scheduled_time), 60)))
-    # Use a deterministic seed based on game id and elapsed
-    :rand.seed(:exsplus, {game.id, elapsed, 42})
-    a = :rand.uniform(3) - 1 + rem(game.id, 2) # 0..3
-    b = :rand.uniform(3) - 1 # 0..2
-    {a, b, elapsed}
+  defp filter_non_admins_if_admin(users, :admin) do
+    Enum.filter(users, &(&1.role == :frontend))
+  end
+  defp filter_non_admins_if_admin(users, _), do: users
+
+  defp get_page_icon(page) do
+    case page do
+      "dashboard" -> "home"
+      "users" -> "users"
+      "game_categories" -> "folder"
+      "games" -> "play"
+      "teams" -> "user-group"
+      _ -> "document"
+    end
+  end
+
+  defp get_tab_icon(tab) do
+    case tab do
+      "active" -> "check-circle"
+      "inactive" -> "x-circle"
+      "pending" -> "clock"
+      "admins" -> "shield-check"
+      _ -> "document"
+    end
   end
 end

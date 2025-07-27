@@ -1,0 +1,34 @@
+  @impl true
+  def handle_event("load_pending_bet", %{"bet_id" => bet_id}, socket) do
+    bet_id = String.to_integer(bet_id)
+    bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
+    
+    if bet && bet.status == "pending" do
+      # Convert placed bet back to bet slip format
+      bet_slip = Enum.map(bet.bet_selections, fn selection ->
+        %{
+          game_id: selection.game_id,
+          game_desc: selection.game_desc,
+          type: selection.bet_type,
+          odds: selection.odds,
+          stake: bet.stake_amount
+        }
+      end)
+      
+      # Delete the pending bet since we're editing it
+      Bets.delete_bet(bet)
+      
+      # Reload placed bets
+      placed_bets = Bets.list_placed_bets(socket.assigns.current_user.id) |> Bets.preload_selections()
+      
+      # Load into bet slip
+      {:noreply,
+       socket
+       |> assign(:bet_slip, bet_slip)
+       |> assign(:bet_slip_open, true)
+       |> assign(:placed_bets, placed_bets)
+       |> assign(:dashboard_view, "games")}
+    else
+      {:noreply, socket}
+    end
+  end

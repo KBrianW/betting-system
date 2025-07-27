@@ -5,9 +5,10 @@ defmodule BetZone.Bets do
   alias BetZone.Bets.BetSelection
   alias BetZone.Games.Game
 
+  # Return all placed bets for a user (including cancelled ones for history)
   def list_placed_bets(user_id) do
     PlacedBet
-    |> where([b], b.user_id == ^user_id)
+    |> where([b], b.user_id == ^user_id and b.status in ["active", "completed"])
     |> order_by([b], [desc: b.inserted_at])
     |> Repo.all()
   end
@@ -145,7 +146,7 @@ defmodule BetZone.Bets do
 
       # 2. Create a refund transaction
       BetZone.Transactions.create_refund_transaction(
-        placed_bet.user,
+        BetZone.Accounts.get_user!(placed_bet.user_id),
         placed_bet,
         "bet_cancel"
       )
@@ -220,7 +221,7 @@ defmodule BetZone.Bets do
           |> PlacedBet.changeset(%{status: "lost"})
           |> Repo.update!()
           # Create loss transaction if needed
-          BetZone.Transactions.create_bet_transaction(placed_bet.user, placed_bet, "bet_loss")
+          BetZone.Transactions.create_bet_transaction(BetZone.Accounts.get_user!(placed_bet.user_id), placed_bet, "bet_loss")
         end
       Enum.all?(selection_results, &(&1 == "won")) ->
         if placed_bet.status != "won" do
@@ -228,7 +229,7 @@ defmodule BetZone.Bets do
           |> PlacedBet.changeset(%{status: "won"})
           |> Repo.update!()
           # Credit wallet
-          BetZone.Transactions.create_bet_transaction(placed_bet.user, placed_bet, "bet_win")
+          BetZone.Transactions.create_bet_transaction(BetZone.Accounts.get_user!(placed_bet.user_id), placed_bet, "bet_win")
         end
       Enum.all?(selection_results, &(&1 == "pending")) ->
         if placed_bet.status != "pending" do
