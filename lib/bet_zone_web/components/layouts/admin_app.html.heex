@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= assigns[:page_title] || "BetZone" %></title>
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title suffix=" · BetZone">
+      <%= assigns[:page_title] || "BetZone" %>
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+    <script phx-track-static type="text/javascript" src={~p"/assets/app.js"}></script>
+  </head>
+ 
+<header class="px-4 sm:px-6 lg:px-8">
+  <div class="flex items-center justify-between border-b border-zinc-100 py-3 text-sm">
+    <div class="flex items-center gap-4">
+      <a href="/super_panel">
+        <img src={~p"/images/logo.svg"} width="36" />
+      </a>
+      <p class="bg-brand/5 text-brand rounded-full px-2 font-medium leading-6">
+        <%= if assigns[:current_user] && assigns[:current_user].role == :admin do %>
+          BetZone Admin
+        <% end %>
+      </p>
+    </div>
+    <div class="flex items-center gap-4">
+      <%= if @current_user do %>
+        <span class="text-gray-700 font-semibold">Hello, <%= @current_user.first_name %></span>
+        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+          <%= String.capitalize(to_string(@current_user.role)) %>
+        </span>
+        <form method="post" action="/users/log_out">
+          <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+          <button type="submit" class="px-3 py-1 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition">Log Out</button>
+        </form>
+      <% else %>
+        <a href="/users/log_in" class="px-3 py-1 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition">Login</a>
+      <% end %>
+    </div>
+  </div>
+</header>
+
+<body class="min-h-screen w-full m-0 p-0 font-cabin text-sm">
+<div class="flex h-[calc(100vh-4rem)]">
+  <!-- Left Panel -->
+  <div class="w-64 bg-zinc-50 border-r border-zinc-200 p-4">
+    <nav class="space-y-2">
+      <!-- Dashboard -->
+      <button 
+        phx-click="navigate_to" 
+        phx-value-page="dashboard"
+        class={[
+          "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out text-left",
+          assigns[:active_page] == "dashboard" && "bg-orange-200 text-orange-900" || "text-gray-700 hover:bg-gray-100"
+        ]}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+        </svg>
+        Dashboard
+      </button>
+
+      <!-- Users -->
+      <button 
+        phx-click="navigate_to" 
+        phx-value-page="users"
+        class={[
+          "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out text-left",
+          assigns[:active_page] == "users" && "bg-orange-200 text-orange-900" || "text-gray-700 hover:bg-gray-100"
+        ]}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+        </svg>
+        Users
+      </button>
+
+      <!-- Game Categories -->
+      <button 
+        phx-click="navigate_to" 
+        phx-value-page="game_categories"
+        class={[
+          "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out text-left",
+          assigns[:active_page] == "game_categories" && "bg-orange-200 text-orange-900" || "text-gray-700 hover:bg-gray-100"
+        ]}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+        </svg>
+        Game Categories
+      </button>
+
+      <!-- Games -->
+      <button 
+        phx-click="navigate_to" 
+        phx-value-page="games"
+        class={[
+          "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out text-left",
+          assigns[:active_page] == "games" && "bg-orange-200 text-orange-900" || "text-gray-700 hover:bg-gray-100"
+        ]}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+        </svg>
+        Games
+      </button>
+
+      <!-- Teams -->
+      <button 
+        phx-click="navigate_to" 
+        phx-value-page="teams"
+        class={[
+          "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out text-left",
+          assigns[:active_page] == "teams" && "bg-orange-200 text-orange-900" || "text-gray-700 hover:bg-gray-100"
+        ]}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+        </svg>
+        Teams
+      </button>
+    </nav>
+  </div>
+
+  <!-- Main Content -->
+  <main class="flex-1 overflow-auto">
+    <div class="px-4 py-4">
+      <div class="mx-auto max-w-6xl">
+        <.flash_group flash={@flash} />
+        <%= @inner_content %>
+      </div>
+    </div>
+  </main>
+</div> 
+</body>
+</html>

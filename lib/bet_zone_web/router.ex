@@ -20,6 +20,10 @@ defmodule BetZoneWeb.Router do
     plug :put_root_layout, html: {BetZoneWeb.Layouts, :super_app}
   end
 
+  pipeline :admin_app do
+    plug :put_root_layout, html: {BetZoneWeb.Layouts, :admin_app}
+  end
+
   pipeline :panel do
     plug :put_root_layout, html: {BetZoneWeb.Layouts, :panel}
   end

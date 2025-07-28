@@ -1,24 +1,220 @@
-<div class="bg-orange-50 min-h-screen">
-  <div class="flex flex-col items-center justify-center mt-12 mb-8">
-    <span class="inline-block w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-bold text-3xl mb-4">
-      <%= @current_user && String.first(@current_user.first_name || "A") %>
-    </span>
-    <h2 class="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
-    <p class="text-gray-500">Welcome, Admin!</p>
-  </div>
-  <div class="block w-full border-b border-gray-200 mb-6">
-    <div class="flex space-x-4 justify-center">
-      <button phx-click="change_tab" phx-value-tab="active" class={["px-4 py-2 -mb-px border-b-2 font-semibold text-gray-700 transition-colors duration-300", @tab == "active" && "border-orange-500 text-orange-600", @tab != "active" && "border-transparent hover:border-orange-300 hover:text-orange-500"]}>Active Users</button>
-      <button phx-click="change_tab" phx-value-tab="inactive" class={["px-4 py-2 -mb-px border-b-2 font-semibold text-gray-700 transition-colors duration-300", @tab == "inactive" && "border-orange-500 text-orange-600", @tab != "inactive" && "border-transparent hover:border-orange-300 hover:text-orange-500"]}>Inactive Users</button>
-      <button phx-click="change_tab" phx-value-tab="pending" class={["px-4 py-2 -mb-px border-b-2 font-semibold text-gray-700 transition-colors duration-300", @tab == "pending" && "border-orange-500 text-orange-600", @tab != "pending" && "border-transparent hover:border-orange-300 hover:text-orange-500"]}>Pending Users</button>
+<!-- Main Content Switcher -->
+<%= case @active_page do %>
+  <% "dashboard" -> %>
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <p class="text-gray-600">Welcome to the <%= if @current_user.role == :admin, do: "Admin" %> dashboard.</p>
     </div>
-  </div>
-  <div class="flex justify-center mb-4">
-    <form phx-change="filter_users" class="w-1/2">
-      <input type="text" name="filter" value={@filter} placeholder="Filter users..." class="w-full px-4 py-2 border border-gray-300 rounded" />
-    </form>
-  </div>
-  <div class="bg-white rounded shadow divide-y divide-gray-200 max-w-2xl mx-auto">
-    <div class="px-4 py-6 text-gray-400 text-center">User list will appear here.</div>
-  </div>
-</div> 
+    
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-center py-12">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Dashboard Content</h3>
+        <p class="text-gray-500">Dashboard content will be added here later.</p>
+      </div>
+    </div>
+
+  <% "users" -> %>
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">User Management</h1>
+      <p class="text-gray-600">Manage user accounts and permissions.</p>
+    </div>
+
+    <!-- User Tabs -->
+    <div class="flex space-x-4 border-b border-gray-200 mb-6">
+      <%= for tab <- get_user_tabs(@current_user.role) do %>
+        <button 
+          phx-click="change_user_tab" 
+          phx-value-tab={tab.key}
+          class={[
+            "px-4 py-2 -mb-px border-b-2 font-semibold transition-colors duration-300 flex items-center gap-2",
+            @active_tab == tab.key && "border-orange-500 text-orange-600" || "border-transparent text-gray-700 hover:border-orange-300 hover:text-orange-500"
+          ]}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <%= case tab.icon do %>
+              <% "check-circle" -> %>
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              <% "x-circle" -> %>
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              <% "clock" -> %>
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+              <% "shield-check" -> %>
+                <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              <% _ -> %>
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            <% end %>
+          </svg>
+          <%= tab.label %>
+        </button>
+      <% end %>
+    </div>
+
+    <!-- Users List -->
+    <div class="bg-white rounded-lg shadow">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">
+          <%= case @active_tab do %>
+            <% "active" -> %> Active Users
+            <% "inactive" -> %> Inactive Users  
+            <% "pending" -> %> Pending Users
+            <% "admins" -> %> Admin Users
+          <% end %>
+        </h3>
+      </div>
+      
+      <div class="divide-y divide-gray-200">
+        <%= for user <- get_filtered_users(@users, @active_tab, @current_user.role) do %>
+          <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+            <div class="flex items-center space-x-4">
+              <div class="flex-shrink-0">
+                <div class="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                  <span class="text-sm font-medium text-gray-700">
+                    <%= String.first(user.first_name) %><%= String.first(user.last_name) %>
+                  </span>
+                </div>
+              </div>
+              <div>
+                <div class="text-sm font-medium text-gray-900">
+                  <%= user.first_name %> <%= user.last_name %>
+                </div>
+                <div class="text-sm text-gray-500"><%= user.email %></div>
+                <div class="text-xs text-gray-400">
+                  Role: <%= String.capitalize(to_string(user.role)) %> | 
+                  Status: <%= String.capitalize(to_string(user.status)) %>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+              <%= if @active_tab != "admins" do %>
+                <%= if user.status == :inactive do %>
+                  <button 
+                    phx-click="activate_user" 
+                    phx-value-user_id={user.id}
+                    class="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full hover:bg-green-200 transition"
+                  >
+                    Activate
+                  </button>
+                <% else %>
+                  <button 
+                    phx-click="deactivate_user" 
+                    phx-value-user_id={user.id}
+                    class="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-full hover:bg-red-200 transition"
+                  >
+                    Deactivate
+                  </button>
+                <% end %>
+                
+                <%= if @current_user.role == :super_user && user.role == :frontend do %>
+                  <button 
+                    phx-click="promote_to_admin" 
+                    phx-value-user_id={user.id}
+                    class="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200 transition"
+                  >
+                    Promote to Admin
+                  </button>
+                <% end %>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+        
+        <%= if Enum.empty?(get_filtered_users(@users, @active_tab, @current_user.role)) do %>
+          <div class="px-6 py-12 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+            </svg>
+            <h3 class="text-sm font-medium text-gray-900 mb-1">No users found</h3>
+            <p class="text-sm text-gray-500">No users in this category.</p>
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+  <% "game_categories" -> %>
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Game Categories</h1>
+      <p class="text-gray-600">Manage sports and game categories.</p>
+    </div>
+
+    <!-- Sports Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <%= for sport <- @sports do %>
+        <button 
+          phx-click="select_sport" 
+          phx-value-sport={sport}
+          class={[
+            "p-6 rounded-lg border-2 transition-all duration-300 text-center",
+            @selected_sport == sport && "border-orange-500 bg-orange-50" || "border-gray-200 hover:border-orange-300 hover:bg-orange-50"
+          ]}
+        >
+          <div class="text-2xl mb-2">
+            <%= case sport do %>
+              <% "football" -> %> ⚽
+              <% "basketball" -> %> 🏀
+              <% "tennis" -> %> 🎾
+              <% "rugby" -> %> 🏈
+              <% "volleyball" -> %> 🏐
+              <% "hockey" -> %> 🏒
+              <% _ -> %> 🎯
+            <% end %>
+          </div>
+          <div class="font-medium text-gray-900 capitalize"><%= sport %></div>
+        </button>
+      <% end %>
+    </div>
+
+    <%= if @selected_sport do %>
+      <div class="mt-8 bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4 capitalize">
+          <%= @selected_sport %> Configuration
+        </h3>
+        <div class="text-center py-8">
+          <p class="text-gray-500">Sport configuration options will be added here.</p>
+        </div>
+      </div>
+    <% end %>
+
+  <% "games" -> %>
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Games Management</h1>
+      <p class="text-gray-600">Create and manage games and matches.</p>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-center py-12">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Games Management</h3>
+        <p class="text-gray-500">Game creation and management tools will be added here.</p>
+      </div>
+    </div>
+
+  <% "teams" -> %>
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Teams Management</h1>
+      <p class="text-gray-600">Create and manage teams and players.</p>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-center py-12">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Teams Management</h3>
+        <p class="text-gray-500">Team creation and management tools will be added here.</p>
+      </div>
+    </div>
+
+  <% _ -> %>
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-center py-12">
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Page Not Found</h3>
+        <p class="text-gray-500">The requested page could not be found.</p>
+      </div>
+    </div>
+<% end %>
