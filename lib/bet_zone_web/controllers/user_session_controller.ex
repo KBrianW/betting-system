@@ -1,17 +1,9 @@
 defmodule BetZoneWeb.UserSessionController do
   use BetZoneWeb, :controller
 
-  import Phoenix.Component, only: [to_form: 1, to_form: 2]
 
   alias BetZone.Accounts
   alias BetZoneWeb.UserAuth
-
-  def new(conn, _params) do
-    conn
-    |> assign(:page_title, "Log in")
-    |> assign(:form, to_form(%{"email" => nil, "password" => nil}, as: "user"))
-    |> render(:new)
-  end
 
   def create(conn, %{"_action" => "registered"} = params) do
     create(conn, params, "Account created successfully!")
@@ -31,16 +23,22 @@ defmodule BetZoneWeb.UserSessionController do
     %{"email" => email, "password" => password} = user_params
 
     if user = Accounts.get_user_by_email_and_password(email, password) do
-      conn
-      |> put_flash(:info, info)
-      |> UserAuth.log_in_user(user, user_params)
-      |> redirect_user_after_login(user)
+      # Check if user account is active
+      if user.status == :active do
+        conn
+        |> put_flash(:info, info)
+        |> UserAuth.log_in_user(user, user_params)
+        |> redirect_user_after_login(user)
+      else
+        conn
+        |> put_flash(:error, "This account has been deactivated. Please contact support.")
+        |> redirect(to: ~p"/users/log_in")
+      end
     else
       # In order to prevent user enumeration attacks, don't disclose whether the email is registered.
       conn
       |> put_flash(:error, "Invalid email or password")
-      |> assign(:form, to_form(%{email: email}, as: "user"))
-      |> render(:new)
+      |> redirect(to: ~p"/users/log_in")
     end
   end
 

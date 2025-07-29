@@ -25,6 +25,7 @@ defmodule BetZoneWeb.UserRegistrationLive do
         id="registration_form"
         phx-submit="save"
         phx-change="validate"
+        phx-debounce="300"
         phx-trigger-action={@trigger_submit}
         action={~p"/users/log_in?_action=registered"}
         method="post"

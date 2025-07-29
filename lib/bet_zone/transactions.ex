@@ -2,7 +2,6 @@ defmodule BetZone.Transactions do
   import Ecto.Query
   alias BetZone.Repo
   alias BetZone.Transactions.Transaction
-  alias BetZone.Accounts.User
   alias BetZone.Games
   @moduledoc """
   asdasfasdas

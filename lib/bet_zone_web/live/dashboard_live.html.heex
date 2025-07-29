@@ -88,30 +88,30 @@
                 <%= if @current_user do %>
                   <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="win" class={[
                     "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
-                    @selected_odds[{game.id, "Win"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
+                    @selected_odds[{game.id, "Win"}] && "bg-gray-200 text-gray-800 border-gray-400" || "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   ]}>Win: <%= game.odds.win %></button>
                 <% else %>
-                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">
+                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-gray-200">
                     Win: <%= game.odds.win %>
                   </button>
                 <% end %>
                 <%= if @current_user do %>
                   <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="draw" class={[
                     "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
-                    @selected_odds[{game.id, "Draw"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
+                    @selected_odds[{game.id, "Draw"}] && "bg-gray-200 text-gray-800 border-gray-400" || "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   ]}>Draw: <%= game.odds.draw %></button>
                 <% else %>
-                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">
+                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-gray-200">
                     Draw: <%= game.odds.draw %>
                   </button>
                 <% end %>
                 <%= if @current_user do %>
                   <button phx-click="add_to_bet_slip" phx-value-game_id={game.id} phx-value-bet_type="loss" class={[
                     "odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition",
-                    @selected_odds[{game.id, "Loss"}] && "bg-yellow-200 text-gray-900" || "bg-gray-100 text-gray-700 hover:bg-yellow-100"
+                    @selected_odds[{game.id, "Loss"}] && "bg-gray-200 text-gray-800 border-gray-400" || "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   ]}>Loss: <%= game.odds.loss %></button>
                 <% else %>
-                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-yellow-100">
+                  <button phx-click="redirect_to_login" class="odds-btn px-4 py-2 rounded font-semibold cursor-pointer border border-gray-300 transition bg-gray-100 text-gray-700 hover:bg-gray-200">
                     Loss: <%= game.odds.loss %>
                   </button>
                 <% end %>
@@ -120,7 +120,43 @@
           </div>
         <% end %>
         <%= if Enum.empty?(filter_games_by_tab(@games, @tab)) do %>
-          <p class="text-gray-400 text-center">No games in this category.</p>
+          <div class="text-center py-12">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">
+              <%= case @tab do %>
+                <% "ongoing" -> %>
+                  No Ongoing Games
+                <% "completed" -> %>
+                  No Completed Games
+                <% _ -> %>
+                  <%= if assigns[:selected_sport_name] do %>
+                    No <%= @selected_sport_name %> Games Available
+                  <% else %>
+                    No Games Available
+                  <% end %>
+              <% end %>
+            </h3>
+            <p class="text-gray-500 mb-4">
+              <%= case @tab do %>
+                <% "ongoing" -> %>
+                  No games are currently in progress. Games will be added soon!
+                <% "completed" -> %>
+                  No games have been completed yet. Check back after games finish!
+                <% _ -> %>
+                  <%= if assigns[:selected_sport_name] do %>
+                    <%= @selected_sport_name %> games will be added soon.
+                  <% else %>
+                    <%= if assigns[:sports] && Enum.any?(@sports) do %>
+                      Games for this sport will be added soon.
+                    <% else %>
+                      No games are currently scheduled. New games will be added soon!
+                    <% end %>
+                  <% end %>
+              <% end %>
+            </p>
+          </div>
         <% end %>
       </div>
     </div>
@@ -152,6 +188,8 @@
               }><%= String.capitalize(bet.status) %></span>
               <%= if bet.status == "pending" do %>
                 <span class="text-xs text-gray-500 ml-2">(Click to edit)</span>
+              <% else %>
+                <span class="text-xs text-gray-500 ml-2">(Games in progress)</span>
               <% end %>
             </div>
           </div>
@@ -232,43 +270,56 @@
 
 <!-- Bet Slip Sidebar -->
 <%= if @current_user && @bet_slip && Enum.any?(@bet_slip) do %>
-  <div id="bet-slip-overlay" phx-click="toggle_bet_slip" class={"fixed inset-0 bg-black bg-opacity-30 transition-opacity #{if @bet_slip_open, do: "opacity-100", else: "opacity-0 pointer-events-none"}"}>
+  <div id="bet-slip-overlay" phx-click="toggle_bet_slip" class={"fixed inset-0 transition-opacity #{if @bet_slip_open, do: "opacity-100", else: "opacity-0 pointer-events-none"}"}>
   </div>
-  <div id="bet-slip" phx-click-away="save_and_close_bet_slip" class={"fixed top-0 right-0 h-full w-80 bg-white shadow-lg z-50 transform transition-transform duration-300 ease-in-out #{if @bet_slip_open, do: "translate-x-0", else: "translate-x-full"}"}>
-    <div phx-click="noop">
-      <div class="flex items-center justify-between p-4 border-b border-gray-200">
+  <div id="bet-slip" class={"fixed top-16 right-4 bottom-4 w-80 bg-gray-50 shadow-md rounded-lg z-40 transform transition-transform duration-300 ease-in-out border border-gray-200 #{if @bet_slip_open, do: "translate-x-0", else: "translate-x-full"}"}>
+    <div phx-click="noop" class="h-full flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between p-4 border-b border-gray-200 bg-white rounded-t-lg">
         <h3 class="text-lg font-bold text-gray-800">Bet Slip</h3>
-        <button phx-click="clear_bet_slip" class="text-gray-500 hover:text-gray-700 px-2 py-1">Cancel All</button>
+        <div class="flex items-center space-x-2">
+          <button phx-click="save_draft_and_close" class="text-blue-600 hover:text-blue-800 px-2 py-1 text-sm font-medium">Save Draft</button>
+          <button phx-click="clear_bet_slip" class="text-red-500 hover:text-red-700 px-2 py-1 text-sm font-medium">Clear All</button>
+        </div>
       </div>
-      <div class="p-4">
-        <ul class="space-y-4">
+      
+      <!-- Scrollable Bets List -->
+      <div class="flex-1 overflow-y-auto p-4">
+        <ul class="space-y-3">
           <%= for bet <- @bet_slip do %>
-            <li class="flex flex-col gap-2 pb-4 border-b border-gray-100">
-              <div class="flex justify-between items-start">
-                <span class="text-gray-700"><%= bet.game_desc %> (<%= bet.type %>)</span>
-                <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="text-gray-500 hover:text-red-500">Cancel</button>
+            <li class="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <span class="text-sm font-medium text-gray-800"><%= bet.game_desc %></span>
+                <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="text-gray-400 hover:text-red-500 text-xs">✕</button>
               </div>
-              <span class="font-semibold text-gray-800">@ <%= bet.odds %></span>
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded"><%= bet.type %></span>
+                <span class="font-semibold text-gray-900">@ <%= bet.odds %></span>
+              </div>
             </li>
           <% end %>
         </ul>
-        <div class="mt-6 space-y-4">
+      </div>
+      
+      <!-- Fixed Footer with Controls -->
+      <div class="p-4 bg-white border-t border-gray-200 rounded-b-lg">
+        <div class="space-y-3">
           <form phx-change="update_stake" phx-debounce="500">
             <div class="flex justify-between items-center">
-              <label class="text-gray-700 font-medium">Stake Amount:</label>
-              <input type="number" 
-                     min="50" 
+              <label class="text-sm font-medium text-gray-700">Stake Amount:</label>
+              <input type="number"
+                     min="50"
                      step="50"
                      value={@bet_stake || 50}
                      name="stake"
                      autocomplete="off"
-                     class="w-24 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
+                     class="w-20 px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
               />
             </div>
           </form>
           <div class="flex justify-between items-center text-sm">
             <span class="text-gray-600">Total Odds:</span>
-            <span class="font-semibold">
+            <span class="font-semibold text-gray-900">
               <%= Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) |> Float.round(2) %>
             </span>
           </div>
@@ -278,7 +329,7 @@
               KSH <%= (Enum.reduce(@bet_slip, 1, fn bet, acc -> acc * bet.odds end) * (@bet_stake || 50)) |> Float.round(2) %>
             </span>
           </div>
-          <button phx-click="place_bets" class="w-full bg-gray-800 text-white px-4 py-2 rounded font-semibold hover:bg-gray-700 transition">Place Bets</button>
+          <button phx-click="place_bets" class="w-full bg-orange-500 text-white px-4 py-2 rounded font-semibold hover:bg-orange-600 transition">Place Bets</button>
         </div>
       </div>
     </div>
@@ -311,15 +362,34 @@
 <% end %>
 
 <script>
-  // Toggle bet slip sidebar
+  // Toggle bet slip sidebar and left panel
   window.addEventListener("phx:bet_slip_open", function() {
-    document.getElementById("bet-slip").classList.remove("translate-x-full");
-    document.getElementById("bet-slip").classList.add("translate-x-0");
-    document.getElementById("bet-slip-overlay").classList.remove("opacity-0", "pointer-events-none");
+    const betSlip = document.getElementById("bet-slip");
+    const betSlipOverlay = document.getElementById("bet-slip-overlay");
+    const leftPanel = document.getElementById("left-panel");
+    
+    // Show bet slip
+    betSlip.classList.remove("translate-x-full");
+    betSlip.classList.add("translate-x-0");
+    betSlipOverlay.classList.remove("opacity-0", "pointer-events-none");
+    
+    // Hide left panel
+    leftPanel.classList.add("-translate-x-full", "opacity-0");
+    leftPanel.style.width = "0";
   });
+  
   window.addEventListener("phx:bet_slip_close", function() {
-    document.getElementById("bet-slip").classList.remove("translate-x-0");
-    document.getElementById("bet-slip").classList.add("translate-x-full");
-    document.getElementById("bet-slip-overlay").classList.add("opacity-0", "pointer-events-none");
+    const betSlip = document.getElementById("bet-slip");
+    const betSlipOverlay = document.getElementById("bet-slip-overlay");
+    const leftPanel = document.getElementById("left-panel");
+    
+    // Hide bet slip
+    betSlip.classList.remove("translate-x-0");
+    betSlip.classList.add("translate-x-full");
+    betSlipOverlay.classList.add("opacity-0", "pointer-events-none");
+    
+    // Show left panel
+    leftPanel.classList.remove("-translate-x-full", "opacity-0");
+    leftPanel.style.width = "16rem"; // w-64 = 16rem
   });
 </script>

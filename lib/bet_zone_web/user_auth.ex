@@ -14,7 +14,7 @@ defmodule BetZoneWeb.UserAuth do
 
   def log_in_user(conn, user, params \\ %{}) do
     token = Accounts.generate_user_session_token(user)
-    user_return_to = get_session(conn, :user_return_to)
+    _user_return_to = get_session(conn, :user_return_to)
 
     conn
     |> renew_session()

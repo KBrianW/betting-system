@@ -3,12 +3,11 @@ defmodule BetZone.Bets do
   alias BetZone.Repo
   alias BetZone.Bets.PlacedBet
   alias BetZone.Bets.BetSelection
-  alias BetZone.Games.Game
 
   # Return all placed bets for a user (including cancelled ones for history)
   def list_placed_bets(user_id) do
     PlacedBet
-    |> where([b], b.user_id == ^user_id and b.status in ["active", "completed"])
+    |> where([b], b.user_id == ^user_id)
     |> order_by([b], [desc: b.inserted_at])
     |> Repo.all()
   end
@@ -134,24 +133,32 @@ defmodule BetZone.Bets do
     Repo.delete(placed_bet)
   end
 
+  def delete_bet(%PlacedBet{} = placed_bet) do
+    Repo.delete(placed_bet)
+  end
+
   def cancel_bet(%PlacedBet{} = placed_bet) do
     Repo.transaction(fn ->
       changeset =
         placed_bet
         |> Ecto.Changeset.change(
           status: "cancelled",
+          result: "cancelled",
           cancelled_at: DateTime.utc_now() |> DateTime.truncate(:second)
         )
       updated_bet = Repo.update!(changeset)
 
-      # 2. Create a refund transaction
-      BetZone.Transactions.create_refund_transaction(
-        BetZone.Accounts.get_user!(placed_bet.user_id),
-        placed_bet,
-        "bet_cancel"
-      )
+      # Only create refund transaction for active bets (where money was actually taken)
+      # Pending bets never had money deducted, so no refund is needed
+      if placed_bet.status == "active" do
+        BetZone.Transactions.create_refund_transaction(
+          BetZone.Accounts.get_user!(placed_bet.user_id),
+          placed_bet,
+          "bet_cancel"
+        )
+      end
 
-      # 3. Return the updated bet
+      # Return the updated bet
       updated_bet
     end)
   end
@@ -212,39 +219,82 @@ defmodule BetZone.Bets do
       end
     end)
 
-    # Determine bet status
+    # Determine bet status based on selection results
     selection_results = Enum.map(updated_selections, & &1.result)
-    cond do
+
+    new_status = cond do
+      # If any selection is lost, the entire bet is lost (immediate loss)
       Enum.any?(selection_results, &(&1 == "lost")) ->
-        if placed_bet.status != "lost" do
-          placed_bet
-          |> PlacedBet.changeset(%{status: "lost"})
-          |> Repo.update!()
-          # Create loss transaction if needed
-          BetZone.Transactions.create_bet_transaction(BetZone.Accounts.get_user!(placed_bet.user_id), placed_bet, "bet_loss")
-        end
+        "lost"
+
+      # If all selections are won, the bet is won
       Enum.all?(selection_results, &(&1 == "won")) ->
-        if placed_bet.status != "won" do
-          placed_bet
-          |> PlacedBet.changeset(%{status: "won"})
-          |> Repo.update!()
-          # Credit wallet
-          BetZone.Transactions.create_bet_transaction(BetZone.Accounts.get_user!(placed_bet.user_id), placed_bet, "bet_win")
-        end
-      Enum.all?(selection_results, &(&1 == "pending")) ->
-        if placed_bet.status != "pending" do
-          placed_bet
-          |> PlacedBet.changeset(%{status: "pending"})
-          |> Repo.update!()
-        end
-      Enum.any?(selection_results, &(&1 == "pending")) && Enum.any?(updated_selections, fn sel -> sel.game.status == "ongoing" end) ->
-        if placed_bet.status != "active" do
-          placed_bet
-          |> PlacedBet.changeset(%{status: "active"})
-          |> Repo.update!()
-        end
+        "won"
+
+      # If there are pending selections and at least one game is ongoing, bet is active
+      Enum.any?(selection_results, &(&1 == "pending")) &&
+      Enum.any?(updated_selections, fn sel -> sel.game.status == "ongoing" end) ->
+        "active"
+
+      # If all games are upcoming (not started), keep as pending for draft bets
+      # or active for placed bets
+      Enum.all?(selection_results, &(&1 == "pending")) &&
+      Enum.all?(updated_selections, fn sel -> sel.game.status == "upcoming" end) ->
+        if placed_bet.status == "pending", do: "pending", else: "active"
+
+      # Default to active for placed bets
       true ->
-        placed_bet
+        if placed_bet.status == "pending", do: "pending", else: "active"
+    end
+
+    # Update bet status and handle transactions if status changed
+    if placed_bet.status != new_status do
+      # Prepare changeset attributes based on new status
+      changeset_attrs = case new_status do
+        status when status in ["pending", "active"] ->
+          # For pending/active status, result must be nil
+          %{status: new_status, result: nil}
+        "completed" ->
+          # For completed status, determine result based on selections
+          final_result = cond do
+            Enum.any?(Enum.map(updated_selections, & &1.result), &(&1 == "lost")) -> "lost"
+            Enum.all?(Enum.map(updated_selections, & &1.result), &(&1 == "won")) -> "won"
+            true -> nil  # This shouldn't happen for completed bets
+          end
+          %{status: new_status, result: final_result, settled_at: DateTime.utc_now() |> DateTime.truncate(:second)}
+        "cancelled" ->
+          # For cancelled status, result should be "cancelled"
+          %{status: new_status, result: "cancelled", cancelled_at: DateTime.utc_now() |> DateTime.truncate(:second)}
+      end
+
+      updated_bet = placed_bet
+      |> PlacedBet.changeset(changeset_attrs)
+      |> Repo.update!()
+
+      # Handle transactions for completed bets
+      case new_status do
+        "lost" ->
+          # Create loss transaction (no money returned)
+          BetZone.Transactions.create_bet_transaction(
+            BetZone.Accounts.get_user!(placed_bet.user_id),
+            placed_bet,
+            "bet_loss"
+          )
+        "won" ->
+          # Credit wallet with winnings
+          BetZone.Transactions.create_bet_transaction(
+            BetZone.Accounts.get_user!(placed_bet.user_id),
+            placed_bet,
+            "bet_win"
+          )
+        _ ->
+          # No transaction needed for active/pending status
+          :ok
+      end
+
+      updated_bet
+    else
+      placed_bet
     end
     # Return the updated bet (reloaded)
     Repo.get!(PlacedBet, placed_bet.id) |> Repo.preload([selections: [:game], user: []])

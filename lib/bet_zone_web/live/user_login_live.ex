@@ -1,8 +1,6 @@
 defmodule BetZoneWeb.UserLoginLive do
   use BetZoneWeb, :live_view
 
-  alias BetZone.Accounts
-  alias BetZoneWeb.UserAuth
 
   def render(assigns) do
     ~H"""
@@ -10,7 +8,7 @@ defmodule BetZoneWeb.UserLoginLive do
       <.header class="text-center">
         Log in to your account
         <:subtitle>
-          Don’t have an account?
+          Don't have an account?
           <.link navigate={~p"/users/register"} class="font-semibold text-brand hover:underline">
             Register
           </.link>
@@ -18,12 +16,15 @@ defmodule BetZoneWeb.UserLoginLive do
         </:subtitle>
       </.header>
 
+      <.flash_group flash={@flash} />
+
       <.simple_form
         for={@form}
         id="login_form"
         action={~p"/users/log_in"}
         method="post"
         autocomplete="off"
+        phx-debounce="300"
       >
         <.error :if={@form.errors != []}>
           Invalid email or password.

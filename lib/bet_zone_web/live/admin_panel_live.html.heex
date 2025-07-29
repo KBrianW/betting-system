@@ -58,8 +58,7 @@
         <h3 class="text-lg font-medium text-gray-900">
           <%= case @active_tab do %>
             <% "active" -> %> Active Users
-            <% "inactive" -> %> Inactive Users  
-            <% "pending" -> %> Pending Users
+            <% "inactive" -> %> Inactive Users
             <% "admins" -> %> Admin Users
           <% end %>
         </h3>
@@ -109,12 +108,22 @@
                 <% end %>
                 
                 <%= if @current_user.role == :super_user && user.role == :frontend do %>
-                  <button 
-                    phx-click="promote_to_admin" 
+                  <button
+                    phx-click="promote_to_admin"
                     phx-value-user_id={user.id}
                     class="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200 transition"
                   >
                     Promote to Admin
+                  </button>
+                <% end %>
+              <% else %>
+                <%= if @active_tab == "admins" && @current_user.role == :super_user do %>
+                  <button
+                    phx-click="revoke_admin"
+                    phx-value-user_id={user.id}
+                    class="px-3 py-1 text-xs font-medium text-orange-700 bg-orange-100 rounded-full hover:bg-orange-200 transition"
+                  >
+                    Revoke Admin
                   </button>
                 <% end %>
               <% end %>

@@ -5,7 +5,6 @@ defmodule BetZoneWeb.DashboardLive do
   alias BetZone.Teams
   alias BetZone.Games
   alias BetZone.Bets
-  alias Timex.Timex
   alias BetZone.Transactions
   alias BetZone.UserHistories
 
@@ -26,6 +25,7 @@ defmodule BetZoneWeb.DashboardLive do
       {:ok, Phoenix.LiveView.redirect(socket, to: "/users/log_in")}
     else
       teams = Teams.list_teams()
+      sports = BetZone.Sports.list_active_sports()
       now = DateTime.utc_now()
       current_week = week_number(now, @season_start)
       cycle = div(current_week - 1, @weeks) + 1
@@ -39,7 +39,10 @@ defmodule BetZoneWeb.DashboardLive do
       games = decorate_games(games, now)
       games = sort_games_by_time(games)
 
-      # Load placed bets if user is logged in
+      # Evaluate and update all user bets to ensure correct status
+      Bets.evaluate_and_update_user_bets(current_user.id)
+
+      # Load placed bets after evaluation
       placed_bets = Bets.list_placed_bets(current_user.id) |> Bets.preload_selections()
 
       # Load draft bets if user is logged in
@@ -65,6 +68,7 @@ defmodule BetZoneWeb.DashboardLive do
        |> assign(:now, now)
        |> assign(:cycle, cycle)
        |> assign(:teams, teams)
+       |> assign(:sports, sports)
        |> assign(:season_start, @season_start)
        |> assign(:bet_slip, bet_slip)
        |> assign(:bet_slip_open, bet_slip != [])
@@ -128,6 +132,41 @@ defmodule BetZoneWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("show_history", _params, socket) do
+    {:noreply, assign(socket, dashboard_view: "history")}
+  end
+
+  @impl true
+  def handle_event("show_bets", _params, socket) do
+    {:noreply, assign(socket, dashboard_view: "bets")}
+  end
+
+  @impl true
+  def handle_event("show_games", _params, socket) do
+    {:noreply, assign(socket, dashboard_view: "games")}
+  end
+
+  @impl true
+  def handle_event("filter_by_sport", %{"sport_id" => sport_id}, socket) do
+    sport_id = String.to_integer(sport_id)
+    # Filter games by sport
+    filtered_games = Enum.filter(socket.assigns.games, &(&1.sport_id == sport_id))
+    filtered_games = filter_and_sort_games(filtered_games, socket.assigns.tab)
+
+    # Find the selected sport for better messaging
+    selected_sport = Enum.find(socket.assigns.sports, &(&1.id == sport_id))
+
+    {:noreply, assign(socket, filtered_games: filtered_games, selected_sport_name: selected_sport && selected_sport.name)}
+  end
+
+  @impl true
+  def handle_event("show_all_sports", _params, socket) do
+    # Reset to show all games
+    filtered_games = filter_and_sort_games(socket.assigns.games, socket.assigns.tab)
+    {:noreply, assign(socket, filtered_games: filtered_games, selected_sport_name: nil)}
+  end
+
+  @impl true
   def handle_event("toggle_bet_slip", _params, socket) do
     bet_slip_open = !socket.assigns[:bet_slip_open]
     if bet_slip_open do
@@ -144,7 +183,7 @@ defmodule BetZoneWeb.DashboardLive do
       {:noreply,
         socket
         |> Phoenix.LiveView.put_flash(:info, "Please log in to place a bet.")
-        |> Phoenix.LiveView.push_redirect(to: "/users/log_in")
+        |> Phoenix.LiveView.push_navigate(to: "/users/log_in")
       }
     else
       game = Enum.find(socket.assigns.games, &("#{&1.id}" == game_id))
@@ -164,8 +203,8 @@ defmodule BetZoneWeb.DashboardLive do
           stake: socket.assigns[:bet_stake] || 50
         }
         bet_slip = socket.assigns.bet_slip || []
-        # Remove any existing bet for this game
-        bet_slip = Enum.reject(bet_slip, &(&1.game_id == bet.game_id))
+        # Remove any existing bet for this game and bet type (allow multiple games, but only one bet type per game)
+        bet_slip = Enum.reject(bet_slip, &(&1.game_id == bet.game_id && &1.type == bet.type))
         bet_slip = [bet | bet_slip]
         # Track selected odds, only one per game
         selected_odds = socket.assigns[:selected_odds] || %{}
@@ -176,33 +215,6 @@ defmodule BetZoneWeb.DashboardLive do
         {:noreply, socket}
       end
     end
-  end
-
-  @impl true
-  def handle_info(:open_bet_slip, socket) do
-    Phoenix.LiveView.push_event(socket, "bet_slip_open", %{})
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info(:close_bet_slip, socket) do
-    Phoenix.LiveView.push_event(socket, "bet_slip_close", %{})
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("show_history", _params, socket) do
-    {:noreply, assign(socket, dashboard_view: "history")}
-  end
-
-  @impl true
-  def handle_event("show_bets", _params, socket) do
-    {:noreply, assign(socket, dashboard_view: "bets")}
-  end
-
-  @impl true
-  def handle_event("show_games", _params, socket) do
-    {:noreply, assign(socket, dashboard_view: "games")}
   end
 
   @impl true
@@ -237,22 +249,36 @@ defmodule BetZoneWeb.DashboardLive do
         {:ok, cancelled_bet} ->
           # Reload user to get updated wallet balance
           current_user = BetZone.Accounts.get_user!(socket.assigns.current_user.id)
-          
+
           # Reload placed bets
           placed_bets = Bets.list_placed_bets(current_user.id) |> Bets.preload_selections()
 
+          # Create appropriate history message based on bet status
+          history_message = if bet.status == "pending" do
+            "Pending bet ##{cancelled_bet.id} cancelled (no refund - no money was taken)."
+          else
+            "Bet ##{cancelled_bet.id} cancelled and refunded."
+          end
+
           UserHistories.create_user_history(%{
             user_id: current_user.id,
-            info: "Bet ##{cancelled_bet.id} cancelled and refunded.",
+            info: history_message,
             type: "bet_cancelled",
             ref_id: cancelled_bet.id
           })
+
+          # Create appropriate flash message based on bet status
+          flash_message = if bet.status == "pending" do
+            "Pending bet ##{bet_id} cancelled (no refund needed)."
+          else
+            "Bet ##{bet_id} cancelled and refunded."
+          end
 
           {:noreply,
            socket
            |> assign(:current_user, current_user)
            |> assign(:placed_bets, placed_bets)
-           |> put_flash(:info, "Bet ##{bet_id} cancelled and refunded.")}
+           |> put_flash(:info, flash_message)}
 
         {:error, _reason} ->
           {:noreply,
@@ -301,6 +327,22 @@ defmodule BetZoneWeb.DashboardLive do
            |> assign(:bet_slip_open, false)
            |> put_flash(:error, "Failed to save bet.")}
       end
+    else
+      {:noreply,
+       socket
+       |> assign(:bet_slip_open, false)}
+    end
+  end
+
+  @impl true
+  def handle_event("save_draft_and_close", _params, socket) do
+    if socket.assigns.current_user && socket.assigns.bet_slip && Enum.any?(socket.assigns.bet_slip) do
+      # Save bet slip as draft
+      Bets.save_bet_slip(socket.assigns.current_user.id, socket.assigns.bet_slip)
+      {:noreply,
+       socket
+       |> assign(:bet_slip_open, false)
+       |> put_flash(:info, "Bet slip saved as draft.")}
     else
       {:noreply,
        socket
@@ -377,32 +419,52 @@ defmodule BetZoneWeb.DashboardLive do
   def handle_event("load_pending_bet", %{"bet_id" => bet_id}, socket) do
     bet_id = String.to_integer(bet_id)
     bet = Enum.find(socket.assigns.placed_bets, &(&1.id == bet_id))
-    
+
     if bet && bet.status == "pending" do
       # Convert placed bet back to bet slip format
-      bet_slip = Enum.map(bet.bet_selections, fn selection ->
+      bet_slip = Enum.map(bet.selections, fn selection ->
         %{
           game_id: selection.game_id,
           game_desc: selection.game_desc,
-          type: selection.bet_type,
+          type: selection.selection_type,
           odds: selection.odds,
-          stake: div(bet.stake_amount, length(bet.bet_selections))
+          stake: Decimal.to_integer(Decimal.div(bet.stake_amount, length(bet.selections)))
         }
       end)
-      
+
+      # Filter out games that are ongoing or completed
+      now = DateTime.utc_now()
+      games = socket.assigns.games
+      valid_bet_slip = Enum.filter(bet_slip, fn bet_item ->
+        game = Enum.find(games, &(&1.id == bet_item.game_id))
+        if game do
+          game_status = game_status(game.scheduled_time, now)
+          game_status == :upcoming
+        else
+          false
+        end
+      end)
+
       # Delete the pending bet since we're editing it
       Bets.delete_bet(bet)
-      
+
       # Reload placed bets
       placed_bets = Bets.list_placed_bets(socket.assigns.current_user.id) |> Bets.preload_selections()
-      
+
+      # Show message if some games were removed
+      socket = if length(valid_bet_slip) < length(bet_slip) do
+        put_flash(socket, :info, "Some games were removed from your draft because they have already started or completed.")
+      else
+        socket
+      end
+
       # Load into bet slip
       {:noreply,
        socket
-       |> assign(:bet_slip, bet_slip)
+       |> assign(:bet_slip, valid_bet_slip)
        |> assign(:bet_slip_open, true)
        |> assign(:placed_bets, placed_bets)
-       |> assign(:bet_stake, div(bet.stake_amount, length(bet.bet_selections)))
+       |> assign(:bet_stake, if(length(valid_bet_slip) > 0, do: div(bet.stake_amount, length(bet.selections)), else: 50))
        |> assign(:dashboard_view, "games")}
     else
       {:noreply, socket}
@@ -472,7 +534,7 @@ defmodule BetZoneWeb.DashboardLive do
 
           # Reload user to get updated wallet balance
           current_user = BetZone.Accounts.get_user!(user.id)
-          
+
           # Reload placed bets
           placed_bets = Bets.list_placed_bets(user.id) |> Bets.preload_selections()
 
@@ -498,6 +560,18 @@ defmodule BetZoneWeb.DashboardLive do
     end
   end
 
+  @impl true
+  def handle_info(:open_bet_slip, socket) do
+    Phoenix.LiveView.push_event(socket, "bet_slip_open", %{})
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:close_bet_slip, socket) do
+    Phoenix.LiveView.push_event(socket, "bet_slip_close", %{})
+    {:noreply, socket}
+  end
+
   defp week_number(now, season_start) do
     days = Date.diff(DateTime.to_date(now), season_start)
     div(days, 7) + 1
@@ -521,6 +595,11 @@ defmodule BetZoneWeb.DashboardLive do
   defp generate_and_insert_games(teams, weeks, games_per_week, season_start_dt, cycle) do
     IO.puts("Yoo, #{teams}")
     team_ids = Enum.map(teams, & &1.id)
+
+    # Get the default sport (first available sport)
+    default_sport = BetZone.Sports.list_sports() |> List.first()
+    sport_id = if default_sport, do: default_sport.id, else: nil
+
     Enum.each(1..weeks, fn week ->
       week_start = DateTime.add(season_start_dt, ((cycle - 1) * weeks + (week - 1)) * 7 * 24 * 60 * 60, :second)
       pairs = random_unique_pairs(team_ids, games_per_week)
@@ -537,6 +616,7 @@ defmodule BetZoneWeb.DashboardLive do
         Games.create_game(%{
           team_a_id: team_a_id,
           team_b_id: team_b_id,
+          sport_id: sport_id,
           scheduled_time: scheduled_time,
           odds_win: odds.win,
           odds_draw: odds.draw,
@@ -622,11 +702,4 @@ defmodule BetZoneWeb.DashboardLive do
     end
   end
 
-  # Add a helper to render a hidden form for bet intent
-  def bet_intent_form(game_id, bet_type) do
-    Phoenix.HTML.Form.form_tag("/bet_intent/store", method: :post, id: "bet-intent-form-#{game_id}-#{bet_type}", style: "display:none;") do
-      Phoenix.HTML.Form.hidden_input(:bet_intent, :game_id, value: game_id) <>
-      Phoenix.HTML.Form.hidden_input(:bet_intent, :bet_type, value: bet_type)
-    end
-  end
 end

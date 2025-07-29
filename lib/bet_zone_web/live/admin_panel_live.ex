@@ -2,8 +2,6 @@ defmodule BetZoneWeb.AdminPanelLive do
   use BetZoneWeb, :live_view
 
   alias BetZone.Accounts
-  alias BetZone.Teams
-  alias BetZone.Games
 
   @impl true
   def mount(_params, session, socket) do
@@ -83,6 +81,25 @@ defmodule BetZoneWeb.AdminPanelLive do
   end
 
   @impl true
+  def handle_event("revoke_admin", %{"user_id" => user_id}, socket) do
+    if socket.assigns.current_user.role == :super_user do
+      user = Accounts.get_user!(user_id)
+      case Accounts.update_user_role(user, :frontend) do
+        {:ok, _updated_user} ->
+          users = load_users_by_role(socket.assigns.current_user.role)
+          {:noreply,
+           socket
+           |> assign(:users, users)
+           |> put_flash(:info, "Admin revoked successfully.")}
+        {:error, _changeset} ->
+          {:noreply, put_flash(socket, :error, "Failed to revoke admin.")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Unauthorized action.")}
+    end
+  end
+
+  @impl true
   def handle_event("activate_user", %{"user_id" => user_id}, socket) do
     user = Accounts.get_user!(user_id)
     case Accounts.update_user_status(user, :active) do
@@ -135,8 +152,7 @@ defmodule BetZoneWeb.AdminPanelLive do
   defp get_user_tabs(current_user_role) do
     base_tabs = [
       %{key: "active", label: "Active", icon: "check-circle"},
-      %{key: "inactive", label: "Inactive", icon: "x-circle"},
-      %{key: "pending", label: "Pending", icon: "clock"}
+      %{key: "inactive", label: "Inactive", icon: "x-circle"}
     ]
 
     if current_user_role == :super_user do
@@ -150,7 +166,6 @@ defmodule BetZoneWeb.AdminPanelLive do
     case tab do
       "active" -> filter_users_by_status(users, :active) |> filter_non_admins_if_admin(current_user_role)
       "inactive" -> filter_users_by_status(users, :inactive) |> filter_non_admins_if_admin(current_user_role)
-      "pending" -> filter_users_by_status(users, :pending) |> filter_non_admins_if_admin(current_user_role)
       "admins" -> if current_user_role == :super_user, do: filter_users_by_role(users, :admin), else: []
     end
   end
@@ -160,24 +175,4 @@ defmodule BetZoneWeb.AdminPanelLive do
   end
   defp filter_non_admins_if_admin(users, _), do: users
 
-  defp get_page_icon(page) do
-    case page do
-      "dashboard" -> "home"
-      "users" -> "users"
-      "game_categories" -> "folder"
-      "games" -> "play"
-      "teams" -> "user-group"
-      _ -> "document"
-    end
-  end
-
-  defp get_tab_icon(tab) do
-    case tab do
-      "active" -> "check-circle"
-      "inactive" -> "x-circle"
-      "pending" -> "clock"
-      "admins" -> "shield-check"
-      _ -> "document"
-    end
-  end
 end

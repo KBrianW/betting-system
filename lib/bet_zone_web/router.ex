@@ -60,7 +60,7 @@ end
 
   # Admin Panel Scope
   scope "/", BetZoneWeb do
-    pipe_through [:browser, :panel]
+    pipe_through [:browser, :admin_app]
     live "/admin_panel", AdminPanelLive, :index
   end
 

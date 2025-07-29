@@ -19,7 +19,7 @@ defmodule BetZone.Transactions.Transaction do
     |> cast(attrs, [:amount, :type, :status, :reference, :description, :user_id])
     |> validate_required([:amount, :type, :status, :user_id])
     |> validate_number(:amount, greater_than: 0)
-    |> validate_inclusion(:type, ["deposit", "withdrawal", "bet_place", "bet_win", "bet_loss"])
+    |> validate_inclusion(:type, ["deposit", "withdrawal", "bet_place", "bet_win", "bet_loss", "bet_cancel"])
     |> validate_inclusion(:status, ["pending", "completed", "failed"])
     |> foreign_key_constraint(:user_id)
   end

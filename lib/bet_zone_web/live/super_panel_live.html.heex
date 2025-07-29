@@ -58,8 +58,7 @@
         <h3 class="text-lg font-medium text-gray-900">
           <%= case @active_tab do %>
             <% "active" -> %> Active Users
-            <% "inactive" -> %> Inactive Users  
-            <% "pending" -> %> Pending Users
+            <% "inactive" -> %> Inactive Users
             <% "admins" -> %> Admin Users
           <% end %>
         </h3>
@@ -109,12 +108,22 @@
                 <% end %>
                 
                 <%= if @current_user.role == :super_user && user.role == :frontend do %>
-                  <button 
-                    phx-click="promote_to_admin" 
+                  <button
+                    phx-click="promote_to_admin"
                     phx-value-user_id={user.id}
                     class="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200 transition"
                   >
                     Promote to Admin
+                  </button>
+                <% end %>
+              <% else %>
+                <%= if @active_tab == "admins" && @current_user.role == :super_user do %>
+                  <button
+                    phx-click="revoke_admin"
+                    phx-value-user_id={user.id}
+                    class="px-3 py-1 text-xs font-medium text-orange-700 bg-orange-100 rounded-full hover:bg-orange-200 transition"
+                  >
+                    Revoke Admin
                   </button>
                 <% end %>
               <% end %>
@@ -143,29 +152,87 @@
     <!-- Sports Grid -->
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       <%= for sport <- @sports do %>
-        <button 
-          phx-click="select_sport" 
-          phx-value-sport={sport}
-          class={[
-            "p-6 rounded-lg border-2 transition-all duration-300 text-center",
-            @selected_sport == sport && "border-orange-500 bg-orange-50" || "border-gray-200 hover:border-orange-300 hover:bg-orange-50"
-          ]}
+        <div class="relative">
+          <button
+            phx-click="select_sport"
+            phx-value-sport={sport.id}
+            class={[
+              "w-full p-6 rounded-lg border-2 transition-all duration-300 text-center",
+              @selected_sport == sport.id && "border-orange-500 bg-orange-50" || "border-gray-200 hover:border-orange-300 hover:bg-orange-50"
+            ]}
+          >
+            <div class="text-2xl mb-2"><%= sport.emoji || "🎯" %></div>
+            <div class="font-medium text-gray-900 capitalize"><%= sport.name %></div>
+          </button>
+          <%= if @current_user.role == :super_user do %>
+            <button
+              phx-click="delete_sport"
+              phx-value-sport_id={sport.id}
+              class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+              title="Delete sport"
+            >
+              ×
+            </button>
+          <% end %>
+        </div>
+      <% end %>
+      
+      <!-- Add Sport Button -->
+      <%= if @current_user.role == :super_user do %>
+        <button
+          phx-click="show_add_sport_form"
+          class="p-6 rounded-lg border-2 border-dashed border-gray-300 hover:border-orange-300 hover:bg-orange-50 transition-all duration-300 text-center"
         >
-          <div class="text-2xl mb-2">
-            <%= case sport do %>
-              <% "football" -> %> ⚽
-              <% "basketball" -> %> 🏀
-              <% "tennis" -> %> 🎾
-              <% "rugby" -> %> 🏈
-              <% "volleyball" -> %> 🏐
-              <% "hockey" -> %> 🏒
-              <% _ -> %> 🎯
-            <% end %>
-          </div>
-          <div class="font-medium text-gray-900 capitalize"><%= sport %></div>
+          <div class="text-2xl mb-2">➕</div>
+          <div class="font-medium text-gray-600">Add Sport</div>
         </button>
       <% end %>
     </div>
+
+    <!-- Add Sport Form Modal -->
+    <%= if @show_add_sport_form do %>
+      <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-96">
+          <h3 class="text-lg font-bold mb-4">Add New Sport</h3>
+          <form phx-submit="add_sport">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Sport Name</label>
+              <input
+                type="text"
+                name="name"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="e.g., Football"
+              />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Emoji</label>
+              <input
+                type="text"
+                name="emoji"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="⚽"
+              />
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button
+                type="button"
+                phx-click="hide_add_sport_form"
+                class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
+              >
+                Add Sport
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    <% end %>
 
     <%= if @selected_sport do %>
       <div class="mt-8 bg-white rounded-lg shadow p-6">
@@ -184,31 +251,340 @@
       <p class="text-gray-600">Create and manage games and matches.</p>
     </div>
     
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="text-center py-12">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Games Management</h3>
-        <p class="text-gray-500">Game creation and management tools will be added here.</p>
+    <!-- Games by Sport -->
+    <%= for sport <- @sports do %>
+      <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-gray-900 flex items-center">
+            <span class="text-2xl mr-2"><%= sport.emoji || "🎯" %></span>
+            <%= sport.name %> Games
+          </h3>
+          <%= if @current_user.role == :super_user do %>
+            <button
+              phx-click="show_add_game_form"
+              phx-value-sport_id={sport.id}
+              class="px-3 py-1 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm"
+            >
+              Add Game
+            </button>
+          <% end %>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teams</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Odds</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                <%= if @current_user.role == :super_user do %>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <% end %>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for game <- Enum.filter(@games, &(&1.sport_id == sport.id)) do %>
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">
+                      <%= game.team_a.name %> vs <%= game.team_b.name %>
+                    </div>
+                    <div class="text-sm text-gray-500">Week <%= game.week %>, Cycle <%= game.cycle %></div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">
+                      <%= Calendar.strftime(game.scheduled_time, "%Y-%m-%d") %>
+                    </div>
+                    <div class="text-sm text-gray-500">
+                      <%= Calendar.strftime(game.scheduled_time, "%H:%M UTC") %>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class={[
+                      "inline-flex px-2 py-1 text-xs font-semibold rounded-full",
+                      game.status == "scheduled" && "bg-blue-100 text-blue-800",
+                      game.status == "ongoing" && "bg-yellow-100 text-yellow-800",
+                      game.status == "completed" && "bg-green-100 text-green-800",
+                      game.status == "postponed" && "bg-gray-100 text-gray-800",
+                      game.status == "cancelled" && "bg-red-100 text-red-800"
+                    ]}>
+                      <%= String.capitalize(game.status) %>
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div>Win: <%= game.odds_win %></div>
+                    <div>Draw: <%= game.odds_draw %></div>
+                    <div>Loss: <%= game.odds_loss %></div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <%= if game.score_a && game.score_b do %>
+                      <%= game.score_a %> - <%= game.score_b %>
+                    <% else %>
+                      -
+                    <% end %>
+                  </td>
+                  <%= if @current_user.role == :super_user do %>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div class="flex space-x-2">
+                        <%= if game.status == "scheduled" do %>
+                          <button
+                            phx-click="update_game_status"
+                            phx-value-game_id={game.id}
+                            phx-value-status="ongoing"
+                            class="text-yellow-600 hover:text-yellow-900"
+                            title="Start Game"
+                          >
+                            ▶️
+                          </button>
+                          <button
+                            phx-click="update_game_status"
+                            phx-value-game_id={game.id}
+                            phx-value-status="postponed"
+                            class="text-gray-600 hover:text-gray-900"
+                            title="Postpone Game"
+                          >
+                            ⏸️
+                          </button>
+                        <% end %>
+                        <%= if game.status == "ongoing" do %>
+                          <button
+                            phx-click="update_game_status"
+                            phx-value-game_id={game.id}
+                            phx-value-status="completed"
+                            class="text-green-600 hover:text-green-900"
+                            title="Complete Game"
+                          >
+                            ✅
+                          </button>
+                        <% end %>
+                        <button
+                          phx-click="update_game_status"
+                          phx-value-game_id={game.id}
+                          phx-value-status="cancelled"
+                          class="text-red-600 hover:text-red-900"
+                          title="Cancel Game"
+                        >
+                          ❌
+                        </button>
+                        <button
+                          phx-click="delete_game"
+                          phx-value-game_id={game.id}
+                          class="text-red-600 hover:text-red-900"
+                          title="Delete Game"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  <% end %>
+                </tr>
+              <% end %>
+              
+              <%= if Enum.filter(@games, &(&1.sport_id == sport.id)) == [] do %>
+                <tr>
+                  <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                    No games scheduled for this sport yet.
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    <% end %>
+
+    <!-- Add Game Form Modal -->
+    <%= if @show_add_game_form do %>
+      <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-96 max-h-screen overflow-y-auto">
+          <h3 class="text-lg font-bold mb-4">Add New Game</h3>
+          <form phx-submit="add_game">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Team A</label>
+              <select name="team_a_id" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
+                <option value="">Select Team A</option>
+                <%= for team <- Enum.filter(@teams, &(&1.sport_id == @selected_sport_for_game)) do %>
+                  <option value={team.id}><%= team.name %></option>
+                <% end %>
+              </select>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Team B</label>
+              <select name="team_b_id" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
+                <option value="">Select Team B</option>
+                <%= for team <- Enum.filter(@teams, &(&1.sport_id == @selected_sport_for_game)) do %>
+                  <option value={team.id}><%= team.name %></option>
+                <% end %>
+              </select>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Scheduled Date</label>
+              <input type="date" name="scheduled_date" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Scheduled Time</label>
+              <input type="time" name="scheduled_time" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" />
+            </div>
+            <div class="grid grid-cols-3 gap-3 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Win Odds</label>
+                <input type="number" step="0.01" name="odds_win" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="1.50" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Draw Odds</label>
+                <input type="number" step="0.01" name="odds_draw" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="3.00" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Loss Odds</label>
+                <input type="number" step="0.01" name="odds_loss" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="2.50" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Week</label>
+                <input type="number" name="week" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="1" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Cycle</label>
+                <input type="number" name="cycle" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="1" />
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button
+                type="button"
+                phx-click="hide_add_game_form"
+                class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
+              >
+                Add Game
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    <% end %>
 
   <% "teams" -> %>
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-gray-900">Teams Management</h1>
-      <p class="text-gray-600">Create and manage teams and players.</p>
+      <p class="text-gray-600">Click on a sport to view and manage its teams.</p>
     </div>
     
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="text-center py-12">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Teams Management</h3>
-        <p class="text-gray-500">Team creation and management tools will be added here.</p>
+    <!-- Sports Categories (Collapsible) -->
+    <%= for sport <- @sports do %>
+      <div class="bg-white rounded-lg shadow mb-4">
+        <!-- Sport Header (Clickable) -->
+        <button
+          phx-click="toggle_sport_teams"
+          phx-value-sport_id={sport.id}
+          class="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors duration-200"
+        >
+          <div class="flex items-center">
+            <span class="text-2xl mr-3"><%= sport.emoji || "🎯" %></span>
+            <h3 class="text-lg font-medium text-gray-900"><%= sport.name %></h3>
+            <span class="ml-3 text-sm text-gray-500">
+              (<%= Enum.count(Enum.filter(@teams, &(&1.sport_id == sport.id))) %> teams)
+            </span>
+          </div>
+          <div class="flex items-center">
+            <%= if MapSet.member?(@expanded_sports, sport.id) do %>
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            <% else %>
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
+            <% end %>
+          </div>
+        </button>
+        
+        <!-- Teams Content (Expandable) -->
+        <%= if MapSet.member?(@expanded_sports, sport.id) do %>
+          <div class="px-6 pb-6 border-t border-gray-100">
+            <div class="flex items-center justify-between mb-4 pt-4">
+              <h4 class="text-md font-medium text-gray-700"><%= sport.name %> Teams</h4>
+              <%= if @current_user.role == :super_user do %>
+                <button
+                  phx-click="show_add_team_form"
+                  phx-value-sport_id={sport.id}
+                  class="px-3 py-1 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm"
+                >
+                  Add Team
+                </button>
+              <% end %>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <%= for team <- Enum.filter(@teams, &(&1.sport_id == sport.id)) do %>
+                <div class="relative bg-gray-50 rounded-lg p-3 text-center">
+                  <div class="font-medium text-gray-900"><%= team.name %></div>
+                  <%= if @current_user.role == :super_user do %>
+                    <button
+                      phx-click="delete_team"
+                      phx-value-team_id={team.id}
+                      class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                      title="Delete team"
+                    >
+                      ×
+                    </button>
+                  <% end %>
+                </div>
+              <% end %>
+              
+              <%= if Enum.filter(@teams, &(&1.sport_id == sport.id)) == [] do %>
+                <div class="col-span-full text-center py-8 text-gray-500">
+                  No teams added for this sport yet.
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
       </div>
-    </div>
+    <% end %>
+
+    <!-- Add Team Form Modal -->
+    <%= if @show_add_team_form do %>
+      <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-96">
+          <h3 class="text-lg font-bold mb-4">Add New Team</h3>
+          <form phx-submit="add_team">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Team Name</label>
+              <input
+                type="text"
+                name="name"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="e.g., Manchester United"
+              />
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button
+                type="button"
+                phx-click="hide_add_team_form"
+                class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
+              >
+                Add Team
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    <% end %>
 
   <% _ -> %>
     <div class="bg-white rounded-lg shadow p-6">
