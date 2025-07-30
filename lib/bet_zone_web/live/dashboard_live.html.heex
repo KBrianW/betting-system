@@ -163,12 +163,15 @@
 
  <% "bets" -> %>
   <div class="mt-8 mb-8 max-w-2xl mx-auto">
+    <!-- Back Button -->
     <button phx-click="show_games" class="mb-4 text-gray-600 hover:underline flex items-center">
       <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
       </svg>
       Back to Games
     </button>
+
+    <!-- My Bets Section -->
     <h3 class="text-xl font-bold mb-4 text-gray-700">My Bets</h3>
     <div class="bg-white rounded shadow divide-y divide-gray-200">
       <%= for bet <- @placed_bets, bet.status in ["pending", "active"] do %>
@@ -198,10 +201,33 @@
           <% end %>
         </div>
       <% end %>
+
       <%= if Enum.empty?(Enum.filter(@placed_bets, fn bet -> bet.status in ["pending", "active"] end)) do %>
         <div class="px-4 py-6 text-gray-400 text-center">No active or pending bets.</div>
       <% end %>
     </div>
+
+    <!-- Drafts Section -->
+    <h3 class="text-xl font-bold mt-8 mb-4 text-gray-700">Drafts</h3>
+    <div class="bg-white rounded shadow divide-y divide-gray-200">
+      <%= for bet <- @bet_slip do %>
+        <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
+          <div class="flex flex-col flex-1 cursor-pointer" phx-click="load_draft_bet" phx-value-game_id={bet.game_id}>
+            <div class="text-gray-800 font-semibold"><%= bet.game_desc %></div>
+            <div class="text-xs text-gray-400 mb-1">Not placed</div>
+            <div class="text-sm text-gray-600">Type: <%= bet.type %> | Odds: <%= bet.odds %> | Stake: <%= bet.stake %></div>
+            <div class="text-sm mt-1 text-yellow-600 font-semibold">Status: Draft</div>
+          </div>
+          <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="ml-4 text-gray-400 hover:text-red-500 text-sm">✕</button>
+        </div>
+      <% end %>
+
+      <%= if Enum.empty?(@bet_slip) do %>
+        <div class="px-4 py-6 text-gray-400 text-center">No draft bets available.</div>
+      <% end %>
+    </div>
+
+    <!-- Shared Bet Modal -->
     <.live_component module={BetZoneWeb.BetModalComponent} id="bet-modal" show={@show_bet_modal} bet={@selected_bet} />
   </div>
 

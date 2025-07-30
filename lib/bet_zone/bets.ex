@@ -79,6 +79,8 @@ defmodule BetZone.Bets do
     delete_all_draft_bets(user_id)
 
     # Insert new draft bets
+    
+
     drafts =
       Enum.map(bet_slip, fn bet ->
         %{
@@ -95,6 +97,7 @@ defmodule BetZone.Bets do
       end)
 
     Repo.insert_all("draft_bets", drafts)
+
   end
 
   def list_draft_bets(user_id) do

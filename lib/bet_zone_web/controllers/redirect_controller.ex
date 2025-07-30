@@ -1,6 +1,6 @@
 defmodule BetZoneWeb.RedirectController do
   use BetZoneWeb, :controller
-  
+
   alias BetZone.Accounts
 
   def dashboard_redirect(conn, _params) do
@@ -9,14 +9,15 @@ defmodule BetZoneWeb.RedirectController do
       nil ->
         # No user logged in, redirect to login
         redirect(conn, to: "/users/log_in")
-      
+
       user_token ->
         # User is logged in, get user and redirect based on role
+        
         case Accounts.get_user_by_session_token(user_token) do
           nil ->
             # Invalid token, redirect to login
             redirect(conn, to: "/users/log_in")
-          
+
           user ->
             # Redirect based on user role
             case user.role do

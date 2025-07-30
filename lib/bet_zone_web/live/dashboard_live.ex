@@ -82,7 +82,8 @@ defmodule BetZoneWeb.DashboardLive do
        |> assign(:show_bet_modal, false)
        |> assign(:selected_bet, nil)
        |> assign(:show_cancel_confirm, false)
-       |> assign(:bet_to_cancel, nil)}
+       |> assign(:bet_to_cancel, nil)
+       |> assign(:test, "H")}
     end
   end
 
@@ -347,6 +348,7 @@ defmodule BetZoneWeb.DashboardLive do
       {:noreply,
        socket
        |> assign(:bet_slip_open, false)}
+
     end
   end
 

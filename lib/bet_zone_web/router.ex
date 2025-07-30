@@ -68,7 +68,7 @@ end
   scope "/", BetZoneWeb do
     pipe_through [:browser, :root]
     get "/", RedirectController, :dashboard_redirect # Set root path to redirect to dashboard
-    delete "/users/register", RedirectController, :register_redirect
+    post "/users/register", RedirectController, :register_redirect
     live "/users/register", UserRegistrationLive, :new
     live "/users/log_in", UserLoginLive, :new
     post "/users/log_in", UserSessionController, :create
