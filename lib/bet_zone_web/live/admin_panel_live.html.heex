@@ -1,27 +1,167 @@
-<!-- Main Content Switcher -->
-<%= case @active_page do %>
-  <% "dashboard" -> %>
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-      <p class="text-gray-600">Welcome to the <%= if @current_user.role == :admin, do: "Admin" %> dashboard.</p>
-    </div>
-    
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="text-center py-12">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Dashboard Content</h3>
-        <p class="text-gray-500">Dashboard content will be added here later.</p>
-      </div>
-    </div>
+<!-- Admin Dashboard Overview Tabs -->
+<%= if @dashboard_view == "dashboard" do %>
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+    <p class="text-gray-600">View summary statistics and insights.</p>
+  </div>
 
-  <% "users" -> %>
+  <!-- Dashboard Summary Tabs -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <%= for tab <- [
+      %{key: "users", icon: "👤", label: "Total Users"},
+      %{key: "income", icon: "📈", label: "Total Income"},
+      %{key: "losses", icon: "📉", label: "Total Losses"},
+      %{key: "profit", icon: "💰", label: "Profit"}
+    ] do %>
+      <button
+        phx-click="select_dashboard_tab"
+        phx-value-tab={tab.key}
+        class={
+          [
+          "p-6 rounded-lg border-2 transition-all duration-300 text-center",
+          @dashboard_tab == tab.key && "border-orange-500 bg-orange-50" || "border-gray-200 hover:border-orange-300 hover:bg-orange-50"
+        ]
+        }
+      >
+        <div class="text-3xl mb-2"><%= tab.icon %></div>
+        <div class="font-medium text-gray-900"><%= tab.label %></div>
+      </button>
+    <% end %>
+  </div>
+
+  <!-- Dashboard Tab Content -->
+  <%= case @dashboard_tab do %>
+    <% "users" -> %>
+      <div class="mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-2">All Users</h2>
+        <p class="text-gray-600">View and analyze all frontend users.</p>
+      </div>
+      <!-- Users list layout copied from super panel -->
+      <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-medium text-gray-900">Frontend Users</h3>
+        </div>
+
+        <div class="divide-y divide-gray-200">
+          <%= for user <- Enum.filter(@users, &(&1.role == :frontend)) do %>
+            <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+              <div class="flex items-center space-x-4">
+                <div class="flex-shrink-0">
+                  <div class="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                    <span class="text-sm font-medium text-gray-700">
+                      <%= String.first(user.first_name) %><%= String.first(user.last_name) %>
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-gray-900">
+                    <%= user.first_name %> <%= user.last_name %>
+                  </div>
+                  <div class="text-sm text-gray-500"><%= user.email %></div>
+                </div>
+              </div>
+              <button
+                phx-click="select_user"
+                phx-value-user_id={user.id}
+                class="px-3 py-1 text-xs font-medium text-orange-700 bg-orange-100 rounded-full hover:bg-orange-200 transition"
+              >
+                View Details
+              </button>
+            </div>
+          <% end %>
+
+          <%= if Enum.empty?(Enum.filter(@users, &(&1.role == :frontend))) do %>
+            <div class="px-6 py-12 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+              </svg>
+              <h3 class="text-sm font-medium text-gray-900 mb-1">No users found</h3>
+              <p class="text-sm text-gray-500">No frontend users exist yet.</p>
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <%= if @selected_user do %>
+        <div class="mt-8">
+          <!-- Sub Tabs for Bets & History -->
+          <div class="flex space-x-4 border-b border-gray-200 mb-6">
+            <%= for {label, key} <- [{"My Bets", "bets"}, {"History", "history"}] do %>
+              <button
+                phx-click="select_user_tab"
+                phx-value-tab={key}
+                class={[
+                  "px-4 py-2 -mb-px border-b-2 font-semibold transition-colors duration-300",
+                  @user_view_tab == key && "border-orange-500 text-orange-600" || "border-transparent text-gray-700 hover:border-orange-300 hover:text-orange-500"
+                ]
+                }
+              >
+                <%= label %>
+              </button>
+            <% end %>
+          </div>
+
+          <%= if @user_view_tab == "bets" do %>
+            <div class="bg-white rounded-lg shadow p-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">Placed Bets</h3>
+              <%= if Enum.empty?(@user_bets) do %>
+                <p class="text-gray-500">This user hasn't placed any bets yet.</p>
+              <% else %>
+                <ul class="divide-y divide-gray-200">
+                 <%= for bet <- @user_bets do %>
+                   <%= for selection <- bet.selections do %>
+                      <li class="py-2"><%= selection.game_desc %> - <%= bet.status %></li>
+              <% end %>
+            <% end %>
+
+                </ul>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="bg-white rounded-lg shadow p-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">Betting History</h3>
+              <%= if Enum.empty?(@user_history) do %>
+                <p class="text-gray-500">No betting history available.</p>
+              <% else %>
+                <ul class="divide-y divide-gray-200">
+                  <%= for hist <- @user_history do %>
+                    <li class="py-2"><%= hist.game_desc %> - <%= hist.status %></li>
+                  <% end %>
+                </ul>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+
+    <% "income" -> %>
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Total Income</h3>
+        <p class="text-3xl font-semibold text-green-600">Ksh <%= @total_income %></p>
+      </div>
+
+    <% "losses" -> %>
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Total Losses</h3>
+        <p class="text-3xl font-semibold text-red-600">Ksh <%= @total_losses %></p>
+      </div>
+
+    <% "profit" -> %>
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Profit</h3>
+        <p class="text-3xl font-semibold text-orange-600">Ksh <%= @profit %></p>
+      </div>
+
+    <% _ -> %>
+      <div class="text-gray-500">Select a tab to view dashboard data.</div>
+  <% end %>
+<% end %>
+
+  <%= if @dashboard_view == "users" do %>
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-gray-900">User Management</h1>
       <p class="text-gray-600">Manage user accounts and permissions.</p>
     </div>
-
     <!-- User Tabs -->
     <div class="flex space-x-4 border-b border-gray-200 mb-6">
       <%= for tab <- get_user_tabs(@current_user.role) do %>
@@ -60,6 +200,8 @@
             <% "active" -> %> Active Users
             <% "inactive" -> %> Inactive Users
             <% "admins" -> %> Admin Users
+            <% "users" -> %> Users Overview
+            <% _ -> %> All Users
           <% end %>
         </h3>
       </div>
@@ -131,6 +273,7 @@
           </div>
         <% end %>
         
+        
         <%= if Enum.empty?(get_filtered_users(@users, @active_tab, @current_user.role)) do %>
           <div class="px-6 py-12 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -140,90 +283,6 @@
             <p class="text-sm text-gray-500">No users in this category.</p>
           </div>
         <% end %>
-      </div>
-    </div>
-
-  <% "game_categories" -> %>
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Game Categories</h1>
-      <p class="text-gray-600">Manage sports and game categories.</p>
-    </div>
-
-    <!-- Sports Grid -->
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      <%= for sport <- @sports do %>
-        <button 
-          phx-click="select_sport" 
-          phx-value-sport={sport}
-          class={[
-            "p-6 rounded-lg border-2 transition-all duration-300 text-center",
-            @selected_sport == sport && "border-orange-500 bg-orange-50" || "border-gray-200 hover:border-orange-300 hover:bg-orange-50"
-          ]}
-        >
-          <div class="text-2xl mb-2">
-            <%= case sport do %>
-              <% "football" -> %> ⚽
-              <% "basketball" -> %> 🏀
-              <% "tennis" -> %> 🎾
-              <% "rugby" -> %> 🏈
-              <% "volleyball" -> %> 🏐
-              <% "hockey" -> %> 🏒
-              <% _ -> %> 🎯
-            <% end %>
-          </div>
-          <div class="font-medium text-gray-900 capitalize"><%= sport %></div>
-        </button>
-      <% end %>
-    </div>
-
-    <%= if @selected_sport do %>
-      <div class="mt-8 bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4 capitalize">
-          <%= @selected_sport %> Configuration
-        </h3>
-        <div class="text-center py-8">
-          <p class="text-gray-500">Sport configuration options will be added here.</p>
-        </div>
-      </div>
-    <% end %>
-
-  <% "games" -> %>
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Games Management</h1>
-      <p class="text-gray-600">Create and manage games and matches.</p>
-    </div>
-    
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="text-center py-12">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Games Management</h3>
-        <p class="text-gray-500">Game creation and management tools will be added here.</p>
-      </div>
-    </div>
-
-  <% "teams" -> %>
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Teams Management</h1>
-      <p class="text-gray-600">Create and manage teams and players.</p>
-    </div>
-    
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="text-center py-12">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Teams Management</h3>
-        <p class="text-gray-500">Team creation and management tools will be added here.</p>
-      </div>
-    </div>
-
-  <% _ -> %>
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="text-center py-12">
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Page Not Found</h3>
-        <p class="text-gray-500">The requested page could not be found.</p>
       </div>
     </div>
 <% end %>

@@ -79,7 +79,7 @@ defmodule BetZone.Bets do
     delete_all_draft_bets(user_id)
 
     # Insert new draft bets
-    
+
 
     drafts =
       Enum.map(bet_slip, fn bet ->
@@ -308,5 +308,27 @@ defmodule BetZone.Bets do
     list_placed_bets(user_id)
     |> preload_selections()
     |> Enum.map(&evaluate_and_update_bet/1)
+  end
+
+  def total_user_losses do
+    from(b in PlacedBet, where: b.status == "lost", select: sum(b.stake_amount))
+    |> Repo.one()
+    |> case do
+      nil -> 0
+      total -> total
+    end
+  end
+
+  def total_income do
+    from(b in PlacedBet, where: b.status in ["won", "lost"], select: sum(b.stake_amount))
+    |> Repo.one()
+    |> case do
+      nil -> 0
+      total -> total
+    end
+  end
+
+  def total_profit do
+    total_income() - total_user_losses()
   end
 end
