@@ -5,12 +5,30 @@ defmodule BetZone.Bets do
   alias BetZone.Bets.BetSelection
 
   # Return all placed bets for a user (including cancelled ones for history)
-  def list_placed_bets(user_id) do
-    PlacedBet
-    |> where([b], b.user_id == ^user_id)
-    |> order_by([b], [desc: b.inserted_at])
-    |> Repo.all()
+  def list_placed_bets(user_id, opts \\ []) do
+    query =
+      from b in PlacedBet,
+        where: b.user_id == ^user_id,
+        order_by: [desc: b.inserted_at]
+
+    # Optional status filter
+    query =
+      case Keyword.get(opts, :statuses) do
+        nil -> query
+        statuses -> from b in query, where: b.status in ^statuses
+      end
+
+    # Optional exclude_drafts filter
+    query =
+      if Keyword.get(opts, :exclude_drafts, false) do
+        from b in query, where: not (b.status == "pending" and b.potential_win == 0)
+      else
+        query
+      end
+
+    Repo.all(query)
   end
+
 
   def preload_selections(placed_bets) when is_list(placed_bets) do
     Repo.preload(placed_bets, [selections: [:game]])
@@ -43,33 +61,36 @@ defmodule BetZone.Bets do
 
   def create_placed_bet(attrs, bet_slip) do
     Repo.transaction(fn ->
-      # Create the placed bet
       placed_bet_changeset = PlacedBet.changeset(%PlacedBet{}, attrs)
 
-      with {:ok, placed_bet} <- Repo.insert(placed_bet_changeset) do
-        # Create selections for each bet in the slip
-        selections =
-          Enum.map(bet_slip, fn bet ->
-            %{
-              placed_bet_id: placed_bet.id,
-              game_id: bet.game_id,
-              game_desc: bet.game_desc,
-              selection_type: String.downcase(bet.type),
-              odds: bet.odds,
-              result: "pending",
-              inserted_at: Timex.now() |> DateTime.truncate(:second),
-              updated_at: Timex.now() |> DateTime.truncate(:second)
-            }
-          end)
+      case Repo.insert(placed_bet_changeset) do
+        {:ok, placed_bet} ->
+          selections =
+            Enum.map(bet_slip, fn bet ->
+              %{
+                placed_bet_id: placed_bet.id,
+                game_id: bet.game_id,
+                game_desc: bet.game_desc || "",
+                selection_type: String.downcase(bet.selection_type || bet.type),
+                odds: bet.odds,
+                result: "pending",
+                inserted_at: Timex.now() |> DateTime.truncate(:second),
+                updated_at: Timex.now() |> DateTime.truncate(:second)
+              }
+            end)
 
-        {_count, selections} =
-          Repo.insert_all(BetSelection, selections,
-            returning: true
-          )
+          case Repo.insert_all(BetSelection, selections, returning: true) do
+            {count, inserted_selections} when count > 0 ->
+              %{placed_bet | selections: inserted_selections}
 
-        %{placed_bet | selections: selections}
-      else
-        {:error, changeset} -> Repo.rollback(changeset)
+            _ ->
+              IO.inspect(selections, label: "❌ Selections insert failed")
+              Repo.rollback("Failed to insert selections")
+          end
+
+          {:error, changeset} ->
+            IO.inspect(changeset, label: "❌ Full PlacedBet changeset")
+            Repo.rollback(changeset)
       end
     end)
   end
@@ -122,6 +143,13 @@ defmodule BetZone.Bets do
   def clear_draft_bets(user_id) do
     from(d in "draft_bets", where: d.user_id == ^user_id)
     |> Repo.update_all(set: [status: "cleared"])
+  end
+
+  def get_bet_with_selections(id) do
+    PlacedBet
+    |> where([b], b.id == ^id)
+    |> PlacedBet.with_selections()
+    |> Repo.one()
   end
 
   def get_placed_bet!(id), do: Repo.get!(PlacedBet, id)
@@ -330,5 +358,12 @@ defmodule BetZone.Bets do
 
   def total_profit do
     total_income() - total_user_losses()
+  end
+
+  def list_user_bets(user_id) do
+    PlacedBet
+    |> PlacedBet.by_user(user_id)
+    |> PlacedBet.with_selections()
+    |> Repo.all()
   end
 end

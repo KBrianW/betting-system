@@ -61,7 +61,7 @@
     <!-- Games List -->
     <div class="flex-1 overflow-auto transition-[margin] duration-300 ease-in-out relative z-10" style={"margin-right: #{if @bet_slip_open, do: "20rem", else: "0"}"}>
       <div class="flex flex-col space-y-4">
-        <%= for game <- filter_games_by_tab(@games, @tab) do %>
+        <%= for game <- filter_games_by_tab(@filtered_games || [], @tab) do %>
           <div class="border border-gray-200 rounded p-4 shadow-sm hover:shadow-md flex items-center justify-between bg-white">
             <div class="flex flex-1 items-center justify-between">
               <div class="flex items-center space-x-4">
@@ -119,7 +119,7 @@
             </div>
           </div>
         <% end %>
-        <%= if Enum.empty?(filter_games_by_tab(@games, @tab)) do %>
+        <%= if Enum.empty?(filter_games_by_tab(@filtered_games || [], @tab)) do %>
           <div class="text-center py-12">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -174,7 +174,7 @@
     <!-- My Bets Section -->
     <h3 class="text-xl font-bold mb-4 text-gray-700">My Bets</h3>
     <div class="bg-white rounded shadow divide-y divide-gray-200">
-      <%= for bet <- @placed_bets, bet.status in ["pending", "active"] do %>
+      <%= for bet <- @placed_bets, bet.status in ["active", "completed"] do %>
         <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
           <div class="flex flex-col flex-1 cursor-pointer" phx-click={if bet.status == "pending", do: "load_pending_bet", else: "show_bet_modal"} phx-value-bet_id={bet.id}>
             <div class="text-gray-800 font-semibold">Bet ID: <%= bet.id %></div>
@@ -210,19 +210,21 @@
     <!-- Drafts Section -->
     <h3 class="text-xl font-bold mt-8 mb-4 text-gray-700">Drafts</h3>
     <div class="bg-white rounded shadow divide-y divide-gray-200">
-      <%= for bet <- @bet_slip do %>
-        <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
-          <div class="flex flex-col flex-1 cursor-pointer" phx-click="load_draft_bet" phx-value-game_id={bet.game_id}>
-            <div class="text-gray-800 font-semibold"><%= bet.game_desc %></div>
-            <div class="text-xs text-gray-400 mb-1">Not placed</div>
-            <div class="text-sm text-gray-600">Type: <%= bet.type %> | Odds: <%= bet.odds %> | Stake: <%= bet.stake %></div>
-            <div class="text-sm mt-1 text-yellow-600 font-semibold">Status: Draft</div>
-          </div>
-          <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="ml-4 text-gray-400 hover:text-red-500 text-sm">✕</button>
-        </div>
-      <% end %>
+<%= for bet <- Enum.filter(@placed_bets, &(&1.status == "pending")) do %>
+  <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
+    <div class="flex flex-col flex-1 cursor-pointer" phx-click="show_bet_modal" phx-value-bet_id={bet.id}>
+      <div class="text-gray-800 font-semibold">Bet ID: <%= bet.id %></div>
+      <div class="text-xs text-gray-400 mb-1"><%= Calendar.strftime(bet.inserted_at, "%a, %d %b %Y %H:%M") %></div>
+      <div class="text-sm text-gray-600">
+        Stake: KSH <%= bet.stake_amount %> | Odds: <%= bet.total_odds %> | Potential Win: KSH <%= bet.potential_win %>
+      </div>
+      <div class="text-sm mt-1 text-yellow-600 font-semibold">Status: Draft</div>
+    </div>
+    <button phx-click="request_cancel_bet" phx-value-bet_id={bet.id} class="ml-4 text-red-500 hover:text-red-700 text-sm font-medium">Cancel</button>
+  </div>
+<% end %>
 
-      <%= if Enum.empty?(@bet_slip) do %>
+      <%= if Enum.empty?(Enum.filter(@placed_bets, &(&1.status == "pending"))) do %>
         <div class="px-4 py-6 text-gray-400 text-center">No draft bets available.</div>
       <% end %>
     </div>
@@ -241,7 +243,8 @@
       </button>
       <h3 class="text-xl font-bold mb-4 text-gray-700">Bet History</h3>
       <div class="bg-white rounded shadow divide-y divide-gray-200">
-        <%= for bet <- Enum.filter(@placed_bets, &(&1.status in ["won", "lost", "cancelled"])) do %>
+        <%= for bet <- Enum.filter(@placed_bets, fn bet -> 
+  bet.status in ["won", "lost", "cancelled"] and not is_draft?(bet) end) do %>
           <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-100">
             <div class="flex flex-col flex-1 cursor-pointer" phx-click="show_bet_modal" phx-value-bet_id={bet.id}>
               <div class="text-gray-800 font-semibold">Bet ID: <%= bet.id %></div>
@@ -316,10 +319,10 @@
             <li class="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
               <div class="flex justify-between items-start mb-2">
                 <span class="text-sm font-medium text-gray-800"><%= bet.game_desc %></span>
-                <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.type} class="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                <button phx-click="remove_bet" phx-value-game_id={bet.game_id} phx-value-bet_type={bet.selection_type} class="text-gray-400 hover:text-red-500 text-xs">✕</button>
               </div>
               <div class="flex justify-between items-center">
-                <span class="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded"><%= bet.type %></span>
+                <span class="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded"><%= bet.selection_type %></span>
                 <span class="font-semibold text-gray-900">@ <%= bet.odds %></span>
               </div>
             </li>

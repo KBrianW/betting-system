@@ -42,7 +42,7 @@ defmodule BetZone.Bets.PlacedBet do
     |> validate_inclusion(:result, ["won", "lost", "cancelled"])
     |> validate_mutually_exclusive_status()
     |> foreign_key_constraint(:user_id)
-    |> cast_assoc(:selections)
+    # |> cast_assoc(:selections)
   end
 
   defp validate_mutually_exclusive_status(changeset) do

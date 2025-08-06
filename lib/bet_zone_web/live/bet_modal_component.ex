@@ -29,13 +29,24 @@ defmodule BetZoneWeb.BetModalComponent do
               Status: <%= String.capitalize(@bet.status) %>
             </div>
             <div class="flex justify-end mt-4">
+              <%= if @bet.status == "pending" and Decimal.eq?(@bet.potential_win, 0)do %>
               <button
-                phx-click="show_bets"
-                phx-target={@myself}
-                class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition duration-200 text-sm"
-              >
-                Close
-              </button>
+              phx-click="load_pending_bet"
+              phx-value-bet_id={@bet.id}
+              class="bg-green-600 text-white px-4 py-2 rounded hover:bg-orange-700 transition duration-200 text-sm"
+            >
+              Confirm Bet
+            </button>
+
+              <% else %>
+                <button
+                  phx-click="show_bets"
+                  phx-target={@myself}
+                  class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition duration-200 text-sm"
+                >
+                  Close
+                </button>
+              <% end %>
             </div>
           </div>
         </div>
@@ -44,6 +55,7 @@ defmodule BetZoneWeb.BetModalComponent do
     </div>
     """
   end
+
 
 
   def handle_event("hide_bet_modal", _, socket) do
